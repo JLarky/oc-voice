@@ -40,7 +40,7 @@ function setupSessionsSSE() {
     try {
       const payload = JSON.parse(ev.data);
       const arr = Array.isArray(payload.sessions) ? payload.sessions : [];
-      listEl.innerHTML = arr.length ? arr.map((s: any) => `<li><span class='id'>${s.id}</span> - ${s.title || "(no title)"} <span class='small'>${s.ageSeconds}s</span></li>`).join("") : "<li>(none)</li>";
+       listEl.innerHTML = arr.length ? arr.map((s: any) => `<li><a href='/session/${s.id}'><span class='id'>${s.id}</span></a> - ${s.title || "(no title)"} <span class='small'>${s.ageSeconds}s</span></li>`).join("") : "<li>(none)</li>";
       statusEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
     } catch (e) {
       statusEl.textContent = `Bad data: ${(e as Error).message}`;
@@ -72,10 +72,40 @@ function setupCreateSession() {
   });
 }
 
+function setupSessionMessageForm() {
+  const sid = (window as any).__SESSION_ID__ as string | undefined;
+  if (!sid) return;
+  const form = document.getElementById("session-message-form");
+  const input = document.getElementById("session-message-input") as HTMLInputElement | null;
+  const result = document.getElementById("session-message-result");
+  if (!form || !input || !result) return;
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) { result.textContent = "Enter text"; return; }
+    result.textContent = "Sending...";
+    try {
+      const res = await fetch(`/session/${sid}/message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      const parts = Array.isArray(json.parts) ? json.parts.filter((p: any) => p.type === 'text').map((p: any) => p.text).join("\n") : "(no parts)";
+      result.textContent = `Reply: ${parts}`;
+      input.value = "";
+    } catch (err) {
+      result.textContent = `Error: ${(err as Error).message}`;
+    }
+  });
+}
+
 function init() {
   setupHelloForm();
   setupSessionsSSE();
   setupCreateSession();
+  setupSessionMessageForm();
 }
 
 init();

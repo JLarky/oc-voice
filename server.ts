@@ -190,6 +190,44 @@ const server = Bun.serve({
       }
     }
 
+    // Session detail and message routes
+    if (url.pathname.startsWith("/session/")) {
+      const parts = url.pathname.split("/").filter(Boolean); // ["session", id, maybe 'message']
+      if (parts.length === 2 && req.method === "GET") {
+        const sid = parts[1];
+        const exists = sessions.some((s) => s.id === sid);
+        if (!exists) return Response.redirect("/", 302);
+        const page = `<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"/><title>Session ${sid}</title><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .small{font-size:.75rem;color:#666;} a{color:#0366d6;text-decoration:none;} a:hover{text-decoration:underline;} </style></head><body><h1>Session ${sid}</h1><div><a href=\"/\">&larr; Back to sessions</a></div><form id=\"session-message-form\"><div class=\"row\"><input id=\"session-message-input\" type=\"text\" placeholder=\"Enter message\" /><button type=\"submit\">Send</button></div><div id=\"session-message-result\" class=\"small\"></div></form><script>window.__SESSION_ID__='${sid}';</script><script type=\"module\" src=\"/client.js\"></script></body></html>`;
+        return new Response(page, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+      }
+      if (parts.length === 3 && parts[2] === "message" && req.method === "POST") {
+        const sid = parts[1];
+        const exists = sessions.some((s) => s.id === sid);
+        if (!exists) return Response.json({ ok: false, error: "Session not found" }, { status: 404 });
+        try {
+          const bodyText = await req.text();
+            let text = "";
+            if (bodyText) {
+              try {
+                const parsed = JSON.parse(bodyText);
+                if (typeof parsed.text === "string") text = parsed.text.trim();
+              } catch { /* ignore */ }
+            }
+            if (!text) return Response.json({ ok: false, error: "No text" }, { status: 400 });
+            const remoteRes = await fetch(`${OPENCODE_BASE_URL}/session/${sid}/message`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ parts: [{ type: "text", text }] })
+            });
+            if (!remoteRes.ok) return Response.json({ ok: false, error: `Remote ${remoteRes.status}` }, { status: 500 });
+            const remoteJson = await remoteRes.json();
+            return Response.json({ ok: true, parts: remoteJson.parts || [] });
+        } catch (e) {
+          return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });
+        }
+      }
+    }
+
     // Serve built client bundle
     if (url.pathname === "/client.js") {
       return new Response(Bun.file("public/client.js"), {
