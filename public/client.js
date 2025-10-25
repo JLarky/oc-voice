@@ -44,7 +44,7 @@ function setupSessionsSSE() {
     try {
       const payload = JSON.parse(ev.data);
       const arr = Array.isArray(payload.sessions) ? payload.sessions : [];
-      listEl.innerHTML = arr.length ? arr.map((s) => `<li><a href='/session/${s.id}'><span class='id'>${s.id}</span></a> - ${s.title || "(no title)"} <span class='small'>${s.ageSeconds}s</span></li>`).join("") : "<li>(none)</li>";
+      listEl.innerHTML = arr.length ? arr.map((s) => `<li><a href='/session/${s.id}'><span class='id'>${s.id}</span></a> - ${s.title || "(no title)"}</li>`).join("") : "<li>(none)</li>";
       statusEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
     } catch (e) {
       statusEl.textContent = `Bad data: ${e.message}`;
@@ -111,10 +111,37 @@ function setupSessionMessageForm() {
     }
   });
 }
+function setupMessagesSSE() {
+  const sid = window.__SESSION_ID__;
+  if (!sid)
+    return;
+  const statusEl = document.getElementById("messages-status");
+  const listEl = document.getElementById("messages-list");
+  if (!statusEl || !listEl)
+    return;
+  const es = new EventSource(`/session/${sid}/messages/stream`);
+  es.addEventListener("open", () => {
+    statusEl.textContent = "Connected";
+  });
+  es.addEventListener("error", () => {
+    statusEl.textContent = "Error / reconnecting";
+  });
+  es.addEventListener("messages", (ev) => {
+    try {
+      const payload = JSON.parse(ev.data);
+      const arr = Array.isArray(payload.messages) ? payload.messages : [];
+      listEl.innerHTML = arr.length ? arr.map((m) => `<div class="message"><div class="message-role">${m.role || "message"}</div><div class="message-text">${(m.parts?.[0]?.text || m.text || "").replace(/[&<>\"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] || c)}</div></div>`).join("") : "<div>(no messages)</div>";
+      statusEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    } catch (e) {
+      statusEl.textContent = `Bad data: ${e.message}`;
+    }
+  });
+}
 function init() {
   setupHelloForm();
   setupSessionsSSE();
   setupCreateSession();
+  setupMessagesSSE();
   setupSessionMessageForm();
 }
 init();

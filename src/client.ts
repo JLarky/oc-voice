@@ -8,17 +8,19 @@ function setupHelloForm() {
   if (!form || !btn || !output) return;
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const input = document.getElementById("user-input") as HTMLInputElement | null;
+    const input = document.getElementById(
+      "user-input"
+    ) as HTMLInputElement | null;
     const value = input?.value || "";
     output.textContent = "Loading...";
     try {
       const res = await fetch(`/hello?name=${encodeURIComponent(value)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const html = await res.text();
-      const temp = document.createElement('div');
+      const temp = document.createElement("div");
       temp.innerHTML = html;
       const newEl = temp.firstElementChild;
-      if (newEl && newEl.id === 'hello-output') {
+      if (newEl && newEl.id === "hello-output") {
         output.innerHTML = newEl.innerHTML;
       } else {
         output.textContent = html;
@@ -34,13 +36,26 @@ function setupSessionsSSE() {
   const listEl = document.getElementById("sessions-ul");
   if (!statusEl || !listEl) return;
   const es = new EventSource("/sessions/stream");
-  es.addEventListener("open", () => { statusEl.textContent = "Connected"; });
-  es.addEventListener("error", () => { statusEl.textContent = "Error / reconnecting"; });
+  es.addEventListener("open", () => {
+    statusEl.textContent = "Connected";
+  });
+  es.addEventListener("error", () => {
+    statusEl.textContent = "Error / reconnecting";
+  });
   es.addEventListener("sessions", (ev: MessageEvent) => {
     try {
       const payload = JSON.parse(ev.data);
-       const arr = Array.isArray(payload.sessions) ? payload.sessions : [];
-       listEl.innerHTML = arr.length ? arr.map((s: any) => `<li><a href='/session/${s.id}'><span class='id'>${s.id}</span></a> - ${s.title || "(no title)"}</li>`).join("") : "<li>(none)</li>";
+      const arr = Array.isArray(payload.sessions) ? payload.sessions : [];
+      listEl.innerHTML = arr.length
+        ? arr
+            .map(
+              (s: any) =>
+                `<li><a href='/session/${s.id}'><span class='id'>${
+                  s.id
+                }</span></a> - ${s.title || "(no title)"}</li>`
+            )
+            .join("")
+        : "<li>(none)</li>";
       statusEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
     } catch (e) {
       statusEl.textContent = `Bad data: ${(e as Error).message}`;
@@ -50,7 +65,9 @@ function setupSessionsSSE() {
 
 function setupCreateSession() {
   const form = document.getElementById("create-session-form");
-  const titleInput = document.getElementById("new-session-title") as HTMLInputElement | null;
+  const titleInput = document.getElementById(
+    "new-session-title"
+  ) as HTMLInputElement | null;
   const resultEl = document.getElementById("create-session-result");
   if (!form || !titleInput || !resultEl) return;
   form.addEventListener("submit", async (e) => {
@@ -61,7 +78,7 @@ function setupCreateSession() {
       const res = await fetch("/create-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title })
+        body: JSON.stringify({ title }),
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || `HTTP ${res.status}`);
@@ -76,23 +93,33 @@ function setupSessionMessageForm() {
   const sid = (window as any).__SESSION_ID__ as string | undefined;
   if (!sid) return;
   const form = document.getElementById("session-message-form");
-  const input = document.getElementById("session-message-input") as HTMLInputElement | null;
+  const input = document.getElementById(
+    "session-message-input"
+  ) as HTMLInputElement | null;
   const result = document.getElementById("session-message-result");
   if (!form || !input || !result) return;
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const text = input.value.trim();
-    if (!text) { result.textContent = "Enter text"; return; }
+    if (!text) {
+      result.textContent = "Enter text";
+      return;
+    }
     result.textContent = "Sending...";
     try {
       const res = await fetch(`/session/${sid}/message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text })
+        body: JSON.stringify({ text }),
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      const parts = Array.isArray(json.parts) ? json.parts.filter((p: any) => p.type === 'text').map((p: any) => p.text).join("\n") : "(no parts)";
+      const parts = Array.isArray(json.parts)
+        ? json.parts
+            .filter((p: any) => p.type === "text")
+            .map((p: any) => p.text)
+            .join("\n")
+        : "(no parts)";
       result.textContent = `Reply: ${parts}`;
       input.value = "";
     } catch (err) {
@@ -101,10 +128,55 @@ function setupSessionMessageForm() {
   });
 }
 
+function setupMessagesSSE() {
+  const sid = (window as any).__SESSION_ID__ as string | undefined;
+  if (!sid) return;
+  const statusEl = document.getElementById("messages-status");
+  const listEl = document.getElementById("messages-list");
+  if (!statusEl || !listEl) return;
+  const es = new EventSource(`/session/${sid}/messages/stream`);
+  es.addEventListener("open", () => {
+    statusEl.textContent = "Connected";
+  });
+  es.addEventListener("error", () => {
+    statusEl.textContent = "Error / reconnecting";
+  });
+  es.addEventListener("messages", (ev: MessageEvent) => {
+    try {
+      const payload = JSON.parse(ev.data);
+      const arr = Array.isArray(payload.messages) ? payload.messages : [];
+      listEl.innerHTML = arr.length
+        ? arr
+            .map(
+              (m: any) =>
+                `<div class="message"><div class="message-role">${
+                  m.role || "message"
+                }</div><div class="message-text">${(
+                  m.parts?.[0]?.text ||
+                  m.text ||
+                  ""
+                ).replace(
+                  /[&<>\"]/g,
+                  (c: string) =>
+                    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[
+                      c
+                    ] || c)
+                )}</div></div>`
+            )
+            .join("")
+        : "<div>(no messages)</div>";
+      statusEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    } catch (e) {
+      statusEl.textContent = `Bad data: ${(e as Error).message}`;
+    }
+  });
+}
+
 function init() {
   setupHelloForm();
   setupSessionsSSE();
   setupCreateSession();
+  setupMessagesSSE();
   setupSessionMessageForm();
 }
 
