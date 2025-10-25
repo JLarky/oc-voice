@@ -1,12 +1,58 @@
-// server.ts - Bun HTTP server serving index.html, bundled client, and an API endpoint
+// server.ts - Bun HTTP server serving index.html, bundled client, and API endpoints
 
 const port = 3000;
+
+// In-memory cache of sessions (dummy list initially)
+interface SessionInfo {
+  id: string;
+  title?: string;
+  createdAt: number;
+}
+
+let sessions: SessionInfo[] = [
+  { id: "dummy-1", title: "Example Session 1", createdAt: Date.now() },
+  { id: "dummy-2", title: "Example Session 2", createdAt: Date.now() },
+];
+
+// Helper to produce JSON-friendly list
+function sessionList() {
+  return sessions.map(s => ({ id: s.id, title: s.title, ageSeconds: Math.round((Date.now() - s.createdAt) / 1000) }));
+}
+
+// SSE stream: pushes updated list every 5 seconds
+function sessionsSSE(): Response {
+  const stream = new ReadableStream({
+    start(controller) {
+      function push() {
+        const data = JSON.stringify({ sessions: sessionList(), updatedAt: new Date().toISOString() });
+        controller.enqueue(new TextEncoder().encode(`event: sessions\n`));
+        controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+      }
+      push();
+      const interval = setInterval(push, 5000);
+      (controller as any)._interval = interval; // store reference
+    },
+    cancel() {
+      const interval = (this as any)._interval;
+      if (interval) clearInterval(interval);
+    }
+  });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
 
 const server = Bun.serve({
   port,
   async fetch(req) {
     const url = new URL(req.url);
 
+    // Existing /hello endpoint
     if (url.pathname === "/hello") {
       const raw = url.searchParams.get("name") ?? "";
       if (!raw.trim()) {
@@ -40,16 +86,48 @@ const server = Bun.serve({
       }
     }
 
+    // Simple JSON hello
     if (url.pathname === "/api/hello") {
       return Response.json({ message: "Hello from Bun server!" });
     }
 
+    // SSE stream of sessions
+    if (url.pathname === "/sessions/stream") {
+      return sessionsSSE();
+    }
+
+    // Create a new real session remotely and add to cache
+    if (url.pathname === "/create-session" && req.method === "POST") {
+      try {
+        const bodyText = await req.text();
+        let title = "calc-session";
+        if (bodyText) {
+          try { const parsed = JSON.parse(bodyText); if (typeof parsed.title === "string" && parsed.title.trim()) title = parsed.title.trim(); } catch { /* ignore */ }
+        }
+        // Remote real session creation (sample endpoint)
+        const remoteRes = await fetch("http://127.0.0.1:4096/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+        if (!remoteRes.ok) throw new Error(`remote ${remoteRes.status}`);
+        const remoteData = await remoteRes.json();
+        const newId = remoteData.id || `local-${Date.now()}`;
+        sessions.push({ id: newId, title, createdAt: Date.now() });
+        return Response.json({ ok: true, id: newId, title });
+      } catch (e) {
+        return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });
+      }
+    }
+
+    // Serve built client bundle
     if (url.pathname === "/client.js") {
       return new Response(Bun.file("public/client.js"), {
         headers: { "Content-Type": "text/javascript; charset=utf-8" },
       });
     }
 
+    // Serve index
     if (url.pathname === "/" || url.pathname === "/index.html") {
       return new Response(Bun.file("index.html"), {
         headers: { "Content-Type": "text/html; charset=utf-8" },

@@ -4,14 +4,45 @@
     <meta charset="UTF-8" />
     <title>Bun Hello UI</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 1.5rem; }
+      #sessions-list ul { list-style: none; padding: 0; }
+      #sessions-list li { padding: 4px 6px; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+      #sessions-list li span.id { font-family: monospace; color: #333; }
+      .small { font-size: 0.75rem; color: #666; }
+      .row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+      form, #create-session-form { margin-top: 1rem; }
+    </style>
   </head>
   <body>
-    <h1>Hello World UI</h1>
+    <h1>Sessions Demo</h1>
+
+    <section id="sessions-section">
+      <h2>Sessions</h2>
+      <div id="sessions-status" class="small">Connecting...</div>
+      <div id="sessions-list">
+        <ul id="sessions-ul">
+          <li>(loading)</li>
+        </ul>
+      </div>
+      <form id="create-session-form">
+        <div class="row">
+          <input id="new-session-title" type="text" placeholder="Session title" value="calc-session" />
+          <button type="submit">Create New Session</button>
+        </div>
+        <div id="create-session-result" class="small"></div>
+      </form>
+    </section>
+
+    <hr />
+
+    <h2>Hello World UI</h2>
     <form id="hello-form" data-on:submit="@get('/hello?name=' + document.getElementById('user-input').value)">
       <input id="user-input" type="text" placeholder="Enter text" />
       <button id="hello-btn" type="submit">Call Server</button>
     </form>
     <p id="hello-output"></p>
+
     <script type="module" src="/client.js"></script>
   </body>
 </html>
