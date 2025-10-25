@@ -872,15 +872,15 @@ const server = Bun.serve({
           ip
         )}">&larr; Back to sessions for ${escapeHtml(
           ip
-        )}</a></div><h2>Messages</h2><div id="messages-status" class="status">Connecting...</div><div id="messages-list-container"><div id="messages-list" data-init="@get('/sessions/${escapeHtml(
+        )}</a></div><h2>Messages</h2><div id="messages-status" class="status">Connecting...</div><messages-wrapper><div id="messages-list-container"><div id="messages-list" data-init="@get('/sessions/${escapeHtml(
           ip
         )}/${escapeHtml(
           sid
-        )}/messages/stream')"><div>(loading)</div></div></div><h2>Send Message</h2><form id="session-message-form" data-on:submit="@post('/sessions/${escapeHtml(
+        )}/messages/stream')"><div>(loading)</div></div></div></messages-wrapper><h2>Send Message</h2><form id="session-message-form" data-on:submit="@post('/sessions/${escapeHtml(
           ip
         )}/${escapeHtml(
           sid
-        )}/message'); $messagetext = ''"><div class="row"><textarea id="session-message-input" data-bind:messageText name="messageText" placeholder="Enter message" rows="4" style="flex:1;resize:vertical"></textarea><button type="submit">Send</button></div><div id="session-message-result" class="result"></div></form><script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.6/bundles/datastar.js"></script><script>(function(){var attempts=0;function s(){var el=document.getElementById('messages-list');if(!el||!el.querySelector('.message')){if(attempts++<30) return setTimeout(s,100);return;}el.scrollTop=el.scrollHeight;}s();})();</script><script>(function(){var ta=document.getElementById('session-message-input');var form=document.getElementById('session-message-form');if(!ta||!form) return;ta.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();form.requestSubmit();}});})();</script></body></html>`;
+        )}/message'); $messagetext = ''"><div class="row"><textarea id="session-message-input" data-bind:messageText name="messageText" placeholder="Enter message" rows="4" style="flex:1;resize:vertical"></textarea><button type="submit">Send</button></div><div id="session-message-result" class="result"></div></form><script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.6/bundles/datastar.js"></script><script type="module" src="/client.js"></script><script>(function(){var attempts=0;function s(){var el=document.getElementById('messages-list');if(!el||!el.querySelector('.message')){if(attempts++<30) return setTimeout(s,100);return;}el.scrollTop=el.scrollHeight;}s();})();</script><script>(function(){var ta=document.getElementById('session-message-input');var form=document.getElementById('session-message-form');if(!ta||!form) return;ta.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();form.requestSubmit();}});})();</script></body></html>`;
         return new Response(page, {
           headers: { "Content-Type": "text/html; charset=utf-8" },
         });
@@ -915,6 +915,7 @@ const server = Bun.serve({
       });
     }
 
+    if (url.pathname === '/client.js') { return new Response(Bun.file('public/client.js'), { headers: { 'Content-Type': 'application/javascript; charset=utf-8' } }); }
     return new Response("Not Found", { status: 404 });
   },
 });
