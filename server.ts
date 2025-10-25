@@ -90,30 +90,36 @@ import { renderSessionsUl, renderIpsUl, renderMessageItems } from './rendering';
 // Fetch sessions fresh for an IP (no cache usage, but populates cache for quick create-session reflection)
 async function fetchSessionsFresh(ip: string) {
   const base = resolveBaseUrl(ip);
+  console.log("sessions fetch start", { ip, base });
   try {
     const client = createOpencodeClient({ baseUrl: base });
-    const remote = await client.session.list().catch(() => null);
+    const remote = await client.session.list().catch((e: any) => {
+      console.warn("SDK session.list error", { ip, msg: (e && e.message) || String(e) });
+      return null;
+    });
+    console.log("SDK session.list raw", { ip, type: remote && typeof remote, keys: remote && Object.keys(remote as any), value: remote });
     let list: { id: string; title?: string }[] = [];
-    if (Array.isArray(remote))
+    if (Array.isArray(remote)) {
       list = remote.map((r) => ({ id: r.id, title: r.title }));
-    else if (remote && typeof remote === "object") {
+    } else if (remote && typeof remote === "object") {
       const arr = (remote as any).data || (remote as any).sessions;
-      if (Array.isArray(arr))
-        list = arr.map((r: any) => ({ id: r.id, title: r.title }));
+      if (Array.isArray(arr)) list = arr.map((r: any) => ({ id: r.id, title: r.title }));
     }
     if (!list.length) {
       try {
         const rawRes = await fetch(`${base}/session`);
+        console.log("raw /session status", { ip, status: rawRes.status });
         if (rawRes.ok) {
-          const rawJson = await rawRes.json().catch(() => null);
-          const rawArr = Array.isArray(rawJson)
-            ? rawJson
-            : rawJson?.sessions || rawJson?.data;
-          if (Array.isArray(rawArr))
-            list = rawArr.map((r: any) => ({ id: r.id, title: r.title }));
+          const rawJson = await rawRes.json().catch((e: any) => {
+            console.warn("raw /session json parse error", { ip, msg: (e && e.message) || String(e) });
+            return null;
+          });
+          console.log("raw /session json", { ip, value: rawJson });
+          const rawArr = Array.isArray(rawJson) ? rawJson : rawJson?.sessions || rawJson?.data;
+          if (Array.isArray(rawArr)) list = rawArr.map((r: any) => ({ id: r.id, title: r.title }));
         }
-      } catch {
-        /* ignore */
+      } catch (e) {
+        console.warn("raw /session fetch error", { ip, msg: (e as Error).message });
       }
     }
     const now = Date.now();
@@ -124,6 +130,7 @@ async function fetchSessionsFresh(ip: string) {
     } else {
       cachedSessionsByIp[ip] = { list, fetchedAt: now };
     }
+    console.log("sessions fetch complete", { ip, count: list.length });
     return list;
   } catch (e) {
     console.error("Failed to list sessions", ip, (e as Error).message);

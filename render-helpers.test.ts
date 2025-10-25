@@ -1,9 +1,8 @@
 import { describe, test, expect } from 'bun:test';
-import { renderSessionsUl, renderIpsUl, renderMessageItems, escapeHtml } from './rendering';
+import { renderSessionsUl, renderIpsUl, renderMessageItems, escapeHtml, renderSessionDetailPage, renderSessionsListPage } from './rendering';
 
-
-// Inline snapshot coverage focuses on complete HTML output
-// ensuring structure + escaping remain stable.
+// Inline snapshot coverage focuses on small fragment helpers.
+// Page renderers are large; we assert key structural markers instead of full snapshots.
 
 describe('renderSessionsUl', () => {
   test('empty sessions yields empty li', () => {
@@ -44,6 +43,26 @@ describe('renderMessageItems', () => {
     expect(html).toContain('&lt;script&gt;');
     expect(html).not.toContain('<script>');
     expect(html).toMatchInlineSnapshot(`"<div class=\"message\"><div class=\"message-role\">user</div><div class=\"message-text\">&lt;script&gt;</div></div>"`);
+  });
+});
+
+describe('renderSessionDetailPage', () => {
+  test('renders escaped title and key sections', () => {
+    const html = renderSessionDetailPage({ ip: '1.2.3.4', sessionId: 'sess123', sessionTitle: '<bad>' });
+    expect(html).toContain('&lt;bad&gt;');
+    expect(html).toContain("@get('/sessions/1.2.3.4/sess123/messages/stream')");
+    expect(html).toContain("@get('/sessions/1.2.3.4/sess123/messages/stream')");
+    expect(html.startsWith('<!doctype html><html lang="en"><head><meta charset="UTF-8"/>')).toBe(true);
+  });
+});
+
+describe('renderSessionsListPage', () => {
+  test('renders escaped ip and actions', () => {
+    const html = renderSessionsListPage({ ip: '5.6.7.8' });
+    expect(html).toContain('Sessions for 5.6.7.8');
+    expect(html).toContain("@post('/sessions/5.6.7.8/clear-sessions')");
+    expect(html).toContain('/sessions/5.6.7.8/create-session');
+    expect(html.startsWith('<!doctype html><html lang="en"><head><meta charset="UTF-8"/>')).toBe(true);
   });
 });
 
