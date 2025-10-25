@@ -12,16 +12,17 @@
 - Avoided `dangerouslySetInnerHTML` per project guidelines; relied on Preact's built-in escaping.
 
 ## Current State
-- Fragment level: messages now JSX-based.
-- Page templates (`session-detail.ts`, `sessions-list.ts`) and list fragments (`lists.ts`) still raw template strings.
-- Escaping strategy now mixed (manual escapeHtml in lists/pages, automatic in messages). Consistency will improve as we migrate more components.
+- Fragment level: messages and IP list now JSX-based.
+- Sessions list still raw template string in `renderSessionsUl` (manual escapeHtml).
+- Page templates (`session-detail.ts`, `sessions-list.ts`) still raw template strings.
+- Escaping strategy mixed: JSX fragments rely on Preact escaping; remaining raw templates use escapeHtml. IP list validated (digits + dots) so manual escaping removed.
 
 ## Suggested Next Targets (Incremental)
-1. Convert `lists.ts` (sessions + IP lists) to `lists.tsx` with two small components: `SessionsListUl` and `IpsListUl`.
-2. Extract a shared `PageShell` component to encapsulate `<html><head>...` repeated markup (preserving styles, meta, and inline CSS). Keep returning a string.
-3. Migrate `session-detail.ts` to JSX using `PageShell` + `MessagesSection` (reusing `MessageItems`).
-4. Migrate `sessions-list.ts` similarly, using `SessionsListUl`.
-5. Centralize inline styles as constants or minimal styled components (optional; maintain current visual fidelity first).
+1. Migrate `renderSessionsUl` to JSX (`SessionsUl`) inside `lists.tsx`.
+2. Extract a shared `PageShell` component for repeated `<html><head>` boilerplate.
+3. Migrate `session-detail.ts` to JSX using `PageShell` + `MessageItems`.
+4. Migrate `sessions-list.ts` using `SessionsUl` + `IpsUl`.
+5. After page migrations, reassess inline styles for potential consolidation.
 
 ## Risks & Mitigations
 - Snapshot drift: Mitigated by updating expectations only where necessary; future conversions should similarly keep assertion semantics (structure, required IDs, safety markers) rather than brittle full snapshots.
