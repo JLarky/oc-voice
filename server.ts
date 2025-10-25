@@ -275,7 +275,7 @@ function ipsSSE(): Response {
                       ip
                     )}</span></a> <button data-on:click=\"@post('/ips/remove/${escapeHtml(
                       ip
-                    )}' })\" class=\"remove-btn\">✕</button></li>`
+                    )}')\" class=\"remove-btn\">✕</button></li>`
                 )
                 .join("")
             : '<li class="empty">(no addresses)</li>';
