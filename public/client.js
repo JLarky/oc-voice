@@ -68,11 +68,17 @@ liftHtml("messages-wrapper", {
       if (!list)
         list = root.querySelector("#messages-list");
     };
+    let rafId = null;
     const scroll = () => {
+      if (rafId !== null)
+        cancelAnimationFrame(rafId);
       ensureList();
       if (!list)
         return;
-      list.scrollTop = list.scrollHeight;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        list.scrollTop = list.scrollHeight;
+      });
     };
     scroll();
     const mutObs = new MutationObserver(() => scroll());
@@ -88,6 +94,8 @@ liftHtml("messages-wrapper", {
     const onWinResize = () => scroll();
     window.addEventListener("resize", onWinResize);
     destroy(() => {
+      if (rafId !== null)
+        cancelAnimationFrame(rafId);
       mutObs.disconnect();
       resizeObs.disconnect();
       window.removeEventListener("resize", onWinResize);

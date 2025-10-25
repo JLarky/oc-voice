@@ -10,10 +10,16 @@ liftHtml("messages-wrapper", {
       if (!list)
         list = root.querySelector("#messages-list") as HTMLElement | null;
     };
+    let rafId: number | null = null;
     const scroll = () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       ensureList();
       if (!list) return;
-      list.scrollTop = list.scrollHeight;
+      // Defer until after layout
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        list!.scrollTop = list!.scrollHeight;
+      });
     };
     scroll();
 
@@ -30,6 +36,7 @@ liftHtml("messages-wrapper", {
     window.addEventListener("resize", onWinResize);
 
     destroy(() => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       mutObs.disconnect();
       resizeObs.disconnect();
       window.removeEventListener("resize", onWinResize);
