@@ -15,59 +15,6 @@ interface CachedSessions {
   fetchedAt: number;
 }
 let cachedSessions: CachedSessions | null = null;
-const SESSIONS_CACHE_TTL_MS = 5000;
-
-// Fetch sessions fresh each push + raw fallback; merges with ephemeral cache
-async function fetchSessions() {
-  const now = Date.now();
-  if (
-    cachedSessions &&
-    now - cachedSessions.fetchedAt < SESSIONS_CACHE_TTL_MS
-  ) {
-    return cachedSessions.list;
-  }
-  try {
-    const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
-    const remote = await client.session.list();
-    console.log("SDK session.list raw:", remote);
-    let list: { id: string; title?: string }[] = [];
-    if (Array.isArray(remote)) {
-      list = remote.map((r) => ({ id: r.id, title: r.title }));
-    } else if (remote && typeof remote === "object") {
-      const arr = (remote as any).data || (remote as any).sessions;
-      if (Array.isArray(arr))
-        list = arr.map((r: any) => ({ id: r.id, title: r.title }));
-    }
-    // Raw fallback if still empty
-    if (!list.length) {
-      try {
-        const rawRes = await fetch(`${OPENCODE_BASE_URL}/session`);
-        if (rawRes.ok) {
-          const rawJson = await rawRes.json().catch(() => null);
-          const rawArr = Array.isArray(rawJson)
-            ? rawJson
-            : rawJson?.sessions || rawJson?.data;
-          if (Array.isArray(rawArr))
-            list = rawArr.map((r: any) => ({ id: r.id, title: r.title }));
-        }
-      } catch {
-        /* ignore raw fallback error */
-      }
-    }
-    // Merge with ephemeral cache (avoid duplicates)
-    const cacheExisting = cachedSessions?.list || [];
-    const mergedMap = new Map<string, { id: string; title?: string }>();
-    for (const s of [...list, ...cacheExisting]) {
-      if (!mergedMap.has(s.id)) mergedMap.set(s.id, s);
-    }
-    const merged = Array.from(mergedMap.values());
-    cachedSessions = { list: merged, fetchedAt: now };
-    return merged;
-  } catch (e) {
-    console.error("Failed to list sessions via SDK", (e as Error).message);
-    return [];
-  }
-}
 
 // Fetch sessions fresh without caching (for SSE stream)
 async function fetchSessionsFresh() {
