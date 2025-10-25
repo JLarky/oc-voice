@@ -2,69 +2,40 @@
 
 const port = 3000;
 
-// In-memory cache of sessions (syncs with opencode server)
 import { createOpencodeClient } from "@opencode-ai/sdk";
 
-interface SessionInfo {
-  id: string;
-  title?: string;
-  createdAt: number;
-}
-
-let sessions: SessionInfo[] = [];
-
 // Get the remote host from command line arg or env var (e.g., 192.168.215.4)
-const REMOTE_HOST_IP =
-  process.argv[2] || process.env.REMOTE_HOST_IP || "127.0.0.1";
+const REMOTE_HOST_IP = process.argv[2] || process.env.REMOTE_HOST_IP || "127.0.0.1";
 const OPENCODE_BASE_URL = `http://${REMOTE_HOST_IP}:2000`;
 
-async function refreshSessionsFromSDK() {
+// Fetch sessions fresh each push; no in-memory cache retained
+async function fetchSessions() {
   try {
-    console.log(`Fetching sessions from ${OPENCODE_BASE_URL}...`);
     const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
     const remote = await client.session.list();
-    if (Array.isArray(remote)) {
-      sessions = remote.map((r) => ({
-        id: r.id,
-        title: r.title,
-        createdAt: Date.now(),
-      }));
-      console.log(`Loaded ${sessions.length} sessions from SDK`);
-    }
+    if (!Array.isArray(remote)) return [] as { id: string; title?: string }[];
+    return remote.map(r => ({ id: r.id, title: r.title }));
   } catch (e) {
-    console.error("Failed to refresh sessions from SDK:", (e as Error).message);
+    console.error("Failed to list sessions via SDK", (e as Error).message);
+    return [];
   }
 }
 
-// Fetch initial sessions on startup
-await refreshSessionsFromSDK();
-
-// Periodically try syncing sessions
-setInterval(refreshSessionsFromSDK, 5000);
-
-// Helper to produce JSON-friendly list
-function sessionList() {
-  return sessions.map((s) => ({
-    id: s.id,
-    title: s.title,
-    ageSeconds: Math.round((Date.now() - s.createdAt) / 1000),
-  }));
-}
-
-// SSE stream: pushes updated list every 5 seconds
+// SSE stream: queries SDK every 5s
 function sessionsSSE(): Response {
   let interval: number | undefined;
   const stream = new ReadableStream({
-    start(controller) {
-      function push() {
+    async start(controller) {
+      async function push() {
+        const list = await fetchSessions();
         const data = JSON.stringify({
-          sessions: sessionList(),
+          sessions: list,
           updatedAt: new Date().toISOString(),
         });
         controller.enqueue(new TextEncoder().encode(`event: sessions\n`));
         controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
       }
-      push();
+      await push();
       interval = setInterval(push, 5000);
     },
     cancel() {
@@ -153,7 +124,7 @@ const server = Bun.serve({
       return sessionsSSE();
     }
 
-    // Create a new real session via SDK and add to cache
+    // Create a new session via SDK (no local storage)
     if (url.pathname === "/create-session" && req.method === "POST") {
       try {
         const bodyText = await req.text();
@@ -161,32 +132,14 @@ const server = Bun.serve({
         if (bodyText) {
           try {
             const parsed = JSON.parse(bodyText);
-            if (typeof parsed.title === "string" && parsed.title.trim())
-              title = parsed.title.trim();
-          } catch {
-            /* ignore */
-          }
+            if (typeof parsed.title === "string" && parsed.title.trim()) title = parsed.title.trim();
+          } catch { /* ignore */ }
         }
-        const client = createOpencodeClient({
-          baseUrl: OPENCODE_BASE_URL,
-        });
+        const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
         const created = await client.session.create({ body: { title } });
-        const newId = created.id || `local-${Date.now()}`;
-        sessions.push({
-          id: newId,
-          title: created.title || title,
-          createdAt: Date.now(),
-        });
-        return Response.json({
-          ok: true,
-          id: newId,
-          title: created.title || title,
-        });
+        return Response.json({ ok: true, id: created.id, title: created.title || title });
       } catch (e) {
-        return Response.json(
-          { ok: false, error: (e as Error).message },
-          { status: 500 }
-        );
+        return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });
       }
     }
 
@@ -195,14 +148,19 @@ const server = Bun.serve({
       const parts = url.pathname.split("/").filter(Boolean); // ["session", id, maybe 'message']
       if (parts.length === 2 && req.method === "GET") {
         const sid = parts[1];
-        const exists = sessions.some((s) => s.id === sid);
+        // Confirm session exists via SDK list
+        const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
+        const list = await client.session.list();
+        const exists = Array.isArray(list) && list.some(s => s.id === sid);
         if (!exists) return Response.redirect("/", 302);
         const page = `<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"/><title>Session ${sid}</title><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .small{font-size:.75rem;color:#666;} a{color:#0366d6;text-decoration:none;} a:hover{text-decoration:underline;} </style></head><body><h1>Session ${sid}</h1><div><a href=\"/\">&larr; Back to sessions</a></div><form id=\"session-message-form\"><div class=\"row\"><input id=\"session-message-input\" type=\"text\" placeholder=\"Enter message\" /><button type=\"submit\">Send</button></div><div id=\"session-message-result\" class=\"small\"></div></form><script>window.__SESSION_ID__='${sid}';</script><script type=\"module\" src=\"/client.js\"></script></body></html>`;
         return new Response(page, { headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
       if (parts.length === 3 && parts[2] === "message" && req.method === "POST") {
         const sid = parts[1];
-        const exists = sessions.some((s) => s.id === sid);
+        const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
+        const list = await client.session.list();
+        const exists = Array.isArray(list) && list.some(s => s.id === sid);
         if (!exists) return Response.json({ ok: false, error: "Session not found" }, { status: 404 });
         try {
           const bodyText = await req.text();
