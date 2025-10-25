@@ -19,9 +19,12 @@ interface TextMessage {
   texts: string[];
 }
 
+export const FIRST_MESSAGE_INSTRUCTION =
+  "I'm driving right now, because i use voice-to-text don't be afraid to ask for clarification. You don't need to be very terse when you respond, I use voice-to-text feature that will summarize your response for me, and once I part I can take a look at the code or your full responses. Also try to not mention that I use voice-to-text feature. Okay, so here it goes:";
+
 export async function listMessages(
   remoteHost: string,
-  sessionId: string,
+  sessionId: string
 ): Promise<TextMessage[]> {
   const rawRes = await fetch(`${remoteHost}/session/${sessionId}/message`);
   const messages: Message[] = await rawRes.json();
@@ -49,7 +52,7 @@ export interface SendMessageResult {
 export async function sendMessage(
   remoteHost: string,
   sessionId: string,
-  text: string,
+  text: string
 ): Promise<SendMessageResult> {
   if (!text.trim())
     return { ok: false, status: 400, replyTexts: [], error: "Empty text" };
@@ -70,7 +73,7 @@ export async function sendMessage(
       : reply.data?.parts || [];
     const textParts = Array.isArray(sourceParts)
       ? sourceParts.filter(
-          (p: any) => p && p.type === "text" && typeof p.text === "string",
+          (p: any) => p && p.type === "text" && typeof p.text === "string"
         )
       : [];
     const replyTexts = textParts.map((p: any) => p.text);
@@ -93,7 +96,7 @@ export interface SessionBasic {
 
 // List sessions via raw + fallback parsing
 export async function listSessions(
-  remoteHost: string,
+  remoteHost: string
 ): Promise<SessionBasic[]> {
   const out: SessionBasic[] = [];
   try {
@@ -126,7 +129,7 @@ export interface EnsureSummarizerResult {
 
 export async function ensureSummarizer(
   remoteHost: string,
-  opts: EnsureSummarizerOptions = {},
+  opts: EnsureSummarizerOptions = {}
 ): Promise<EnsureSummarizerResult> {
   const title = (opts.title || "summarizer").toLowerCase();
   const configPath = opts.configPath || "playpen/summarizer-config.json";
@@ -155,7 +158,7 @@ export async function ensureSummarizer(
       configUsed = true;
       console.log(
         "ensureSummarizer reused (config) summarizer session id",
-        match.id,
+        match.id
       );
       return { session: match, created: false, configUsed, configUpdated };
     }
@@ -168,18 +171,18 @@ export async function ensureSummarizer(
         JSON.stringify(
           { lastBaseUrl: remoteHost, summarizerSessionId: byTitle.id },
           null,
-          2,
-        ),
+          2
+        )
       );
       configUpdated = true;
       console.log(
         "ensureSummarizer reused (title) summarizer session id",
-        byTitle.id,
+        byTitle.id
       );
     } catch (e) {
       console.error(
         "ensureSummarizer save existing failed",
-        (e as Error).message,
+        (e as Error).message
       );
     }
     return { session: byTitle, created: false, configUsed, configUpdated };
@@ -208,13 +211,13 @@ export async function ensureSummarizer(
         JSON.stringify(
           { lastBaseUrl: remoteHost, summarizerSessionId: createdSession.id },
           null,
-          2,
-        ),
+          2
+        )
       );
       configUpdated = true;
       console.log(
         "ensureSummarizer created new summarizer session id",
-        createdSession.id,
+        createdSession.id
       );
     } catch (e) {
       console.error("ensureSummarizer save new failed", (e as Error).message);
@@ -237,7 +240,7 @@ export const summarizationPrompt =
 export async function summarizeMessages(
   remoteHost: string,
   recentMessages: { role: string; text: string }[],
-  targetSessionId?: string,
+  targetSessionId?: string
 ): Promise<{
   summary: string;
   action: boolean;
@@ -280,7 +283,7 @@ export async function summarizeMessages(
     const sendCombined = await sendMessage(
       remoteHost,
       summSession,
-      combined + "\n\n" + summarizationPrompt,
+      combined + "\n\n" + summarizationPrompt
     );
     if (!sendCombined.ok)
       return {
@@ -307,7 +310,7 @@ export async function summarizeMessages(
 // Create a new session with given title; returns id or null.
 export async function createSession(
   remoteHost: string,
-  title: string,
+  title: string
 ): Promise<string | null> {
   try {
     const res = await fetch(`${remoteHost}/session`, {
