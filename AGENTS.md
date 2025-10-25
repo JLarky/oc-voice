@@ -55,5 +55,11 @@ Entire repo (server, client, scripts).
 - No linter/formatter; match existing style; avoid heavy deps without discussion
 - No Cursor/Copilot rules present; add summary here if introduced
 
+## Playpen
+- Use `playpen/` for experimental scripts and SDK exploration (ignored by git)
+- Create scripts here to prototype API patterns before adding to server.ts
+- Run scripts with: `bun run playpen/script.ts`
+- Common patterns to explore: `client.session.list()`, raw HTTP endpoints for messages
+
 ## End
 Keep agents surgical—do only requested changes.
