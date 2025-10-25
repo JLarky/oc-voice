@@ -5,7 +5,7 @@
   "scripts": {
     "ask": "bun run ask.ts",
     "build": "bun build src/client.ts --outdir public",
-    "dev": "bun run server.ts",
+    "dev": "bun run --watch server.ts",
     "watch": "bun build src/client.ts --outdir public --watch"
   },
   "dependencies": {
