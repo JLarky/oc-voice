@@ -260,7 +260,7 @@ function messagesSSE(ip: string, sessionId: string): Response {
           const nowTs = Date.now();
           const recentForHash = messages.slice(-3);
           const recentHash = hashRecentMessages(recentForHash);
-          if (cached && cached.messageHash === recentHash && (nowTs - cached.cachedAt) < 5000) {
+          if (cached && cached.messageHash === recentHash) {
             summaryText = cached.summary;
           } else {
             // If a fetch is already in-flight, show placeholder; else start async fetch without awaiting.
