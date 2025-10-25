@@ -13,5 +13,8 @@
     "@opencode-ai/sdk": "^0.15.16",
     "preact": "^10.27.2",
     "preact-render-to-string": "^6.6.3"
+  },
+  "devDependencies": {
+    "@typescript/native-preview": "^7.0.0-dev.20251025.1"
   }
 }
