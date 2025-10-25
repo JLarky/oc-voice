@@ -147,7 +147,7 @@ function sessionsSSE(ip: string): Response {
                       s.id
                     )}"><span class="id">${escapeHtml(
                       s.id
-                    )}</span></a> - ${escapeHtml(s.title || "(no title)")}</li>`
+                    )}</span></a> - ${escapeHtml(s.title || "(no title)")} <button style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px" data-on:click="@post('/sessions/${escapeHtml(ip)}/${escapeHtml(s.id)}/delete-session')">✕</button></li>`
                 )
                 .join("")
             : '<li class="empty">(no sessions)</li>';
@@ -570,6 +570,86 @@ const server = Bun.serve({
       }
     }
 
+    // Delete session for IP: POST /sessions/:ip/:sid/delete-session
+    if (
+      url.pathname.startsWith("/sessions/") &&
+      url.pathname.endsWith("/delete-session") &&
+      req.method === "POST"
+    ) {
+      const parts = url.pathname.split("/").filter(Boolean); // ['sessions', ip, sid, 'delete-session']
+      if (parts.length === 4 && parts[3] === "delete-session") {
+        const ip = parts[1];
+        const sid = parts[2];
+        if (!ipStore.includes(ip))
+          return new Response("Unknown IP", { status: 404 });
+        let deletedOk = false;
+        const base = resolveBaseUrl(ip);
+        try {
+          const client = createOpencodeClient({ baseUrl: base });
+          try {
+            const d = await (client as any).session.delete?.({
+              params: { id: sid },
+            });
+            if (d && (d.id === sid || (d as any).data?.id === sid || (d as any).ok || (d as any).status === "ok")) {
+              deletedOk = true;
+            }
+          } catch (e) {
+            console.warn("SDK delete failed", (e as Error).message);
+          }
+          if (!deletedOk) {
+            try {
+              const rawRes = await fetch(`${base}/session/${sid}`, {
+                method: "DELETE",
+              });
+              if (rawRes.ok) deletedOk = true;
+            } catch {}
+          }
+        } catch (e) {
+          console.error("Delete session route error", (e as Error).message);
+        }
+        if (deletedOk) {
+          const cache = cachedSessionsByIp[ip];
+          if (cache && Array.isArray(cache.list)) {
+            cache.list = cache.list.filter((s) => s.id !== sid);
+          }
+        }
+        // Refresh list (best effort)
+        await fetchSessionsFresh(ip).catch(() => null);
+        const cache = cachedSessionsByIp[ip];
+        const list = cache?.list || [];
+        const sessionItems = list.length
+          ? list
+              .map(
+                (s) =>
+                  `<li><a href="/sessions/${escapeHtml(ip)}/${escapeHtml(
+                    s.id
+                  )}"><span class="id">${escapeHtml(
+                    s.id
+                  )}</span></a> - ${escapeHtml(
+                    s.title || "(no title)"
+                  )} <button style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px" data-on:click="@post('/sessions/${escapeHtml(
+                    ip
+                  )}/${escapeHtml(
+                    s.id
+                  )}/delete-session')">✕</button></li>`
+              )
+              .join("")
+          : '<li class="empty">(no sessions)</li>';
+        const listHtml = `<ul id="sessions-ul">${sessionItems}</ul>`;
+        const resultHtml = `<div id="delete-session-result" class="result">${
+          deletedOk
+            ? "Deleted session: " + escapeHtml(sid)
+            : "Delete failed or session not found"
+        }</div>`;
+        const stream =
+          sendDatastarPatchElements(resultHtml) +
+          sendDatastarPatchElements(listHtml);
+        return new Response(stream, {
+          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+          status: deletedOk ? 200 : 500,
+        });
+      }
+    }
     // Messages SSE: /sessions/:ip/:sid/messages/stream
     if (
       url.pathname.startsWith("/sessions/") &&
@@ -719,11 +799,43 @@ const server = Bun.serve({
         } catch {
           /* ignore */
         }
-        const page = `<!doctype html><html lang="en"><head><meta charset="UTF-8"/><title>Session ${escapeHtml(
-          sid
-        )}</title><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:900px;margin-left:auto;margin-right:auto;} a{color:#0366d6;} input,button{padding:.5rem;font-size:.95rem;border:1px solid #ccc;border-radius:3px;} button{background:#0366d6;color:white;cursor:pointer;border:none;} button:hover{background:#0256c7;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .status{font-size:.75rem;color:#666;margin-bottom:1rem;} .result{font-size:.75rem;color:#666;margin-top:.5rem;} #messages-list{border:1px solid #ddd;padding:1rem;border-radius:4px;margin-top:1rem;max-height:400px;overflow-y:auto;} .message{padding:.5rem;border-bottom:1px solid #eee;font-size:.9rem;} .message-role{font-weight:bold;color:#0366d6;} .message-text{margin-top:.25rem;white-space:pre-wrap;word-break:break-word;} </style></head><body><h1>Session ${escapeHtml(
-          sid
-        )}</h1><div><a href="/sessions/${escapeHtml(
+        let sessionTitle = '';
+try {
+  const base = resolveBaseUrl(ip);
+  const cache = cachedSessionsByIp[ip];
+  if (cache && Array.isArray(cache.list)) {
+    const found = cache.list.find((s) => s.id === sid);
+    if (found && typeof found.title === 'string') sessionTitle = found.title.trim();
+  }
+  if (!sessionTitle) {
+    try {
+      const client2 = createOpencodeClient({ baseUrl: base });
+      const list2 = await client2.session.list().catch(() => []);
+      if (Array.isArray(list2)) {
+        const found2 = list2.find((s: any) => s && s.id === sid);
+        if (found2) {
+        const t = (found2 as any).title || (found2 as any).data?.title;
+        if (typeof t === 'string' && t.trim()) sessionTitle = t.trim();
+        }
+      }
+    } catch {}
+  }
+  if (!sessionTitle) {
+    try {
+      const rawRes2 = await fetch(`${base}/session/${sid}`);
+      if (rawRes2.ok) {
+        const rawJson2 = await rawRes2.json().catch(() => null);
+        if (rawJson2 && rawJson2.id === sid) {
+        const t = (rawJson2 as any).title || (rawJson2 as any).data?.title;
+        if (typeof t === 'string' && t.trim()) sessionTitle = t.trim();
+        }
+      }
+    } catch {}
+  }
+} catch {}
+const page = `<!doctype html><html lang="en"><head><meta charset="UTF-8"/><title>Session ${escapeHtml(
+          sessionTitle || sid
+        )}</title><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:900px;margin-left:auto;margin-right:auto;} a{color:#0366d6;} input,button{padding:.5rem;font-size:.95rem;border:1px solid #ccc;border-radius:3px;} button{background:#0366d6;color:white;cursor:pointer;border:none;} button:hover{background:#0256c7;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .status{font-size:.75rem;color:#666;margin-bottom:1rem;} .result{font-size:.75rem;color:#666;margin-top:.5rem;} #messages-list{border:1px solid #ddd;padding:1rem;border-radius:4px;margin-top:1rem;max-height:400px;overflow-y:auto;} .message{padding:.5rem;border-bottom:1px solid #eee;font-size:.9rem;} .message-role{font-weight:bold;color:#0366d6;} .message-text{margin-top:.25rem;white-space:pre-wrap;word-break:break-word;} .session-id{font-size:.6rem;color:#666;margin-top:.25rem;margin-bottom:1rem;} </style></head><body><h1>${escapeHtml(sessionTitle || sid)}</h1><div><a href="/sessions/${escapeHtml(
           ip
         )}">&larr; Back to sessions for ${escapeHtml(
           ip
@@ -750,11 +862,11 @@ const server = Bun.serve({
         if (!ipStore.includes(ip)) return Response.redirect("/", 302);
         const page = `<!doctype html><html lang="en"><head><meta charset="UTF-8"/><title>Sessions for ${escapeHtml(
           ip
-        )}</title><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:900px;margin-left:auto;margin-right:auto;} a{color:#0366d6;} input,button{padding:.5rem;font-size:.95rem;border:1px solid #ccc;border-radius:3px;} button{background:#0366d6;color:white;cursor:pointer;border:none;} button:hover{background:#0256c7;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .status{font-size:.75rem;color:#666;margin-bottom:1rem;} .result{font-size:.75rem;color:#666;margin-top:.5rem;} #sessions-ul{list-style:none;padding:0;} #sessions-ul li{padding:.5rem;border-bottom:1px solid #eee;font-size:.9rem;} #sessions-ul li:last-child{border-bottom:none;} #sessions-ul li span.id{font-family:monospace;color:#333;font-size:.85rem;} </style></head><body><h1>Sessions for ${escapeHtml(
+        )}</title><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:900px;margin-left:auto;margin-right:auto;} a{color:#0366d6;} input,button{padding:.5rem;font-size:.95rem;border:1px solid #ccc;border-radius:3px;} button{background:#0366d6;color:white;cursor:pointer;border:none;} button:hover{background:#0256c7;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .status{font-size:.75rem;color:#666;margin-bottom:1rem;} .result{font-size:.75rem;color:#666;margin-top:.5rem;} #sessions-ul{list-style:none;padding:0;} #sessions-ul li{padding:.5rem;border-bottom:1px solid #eee;font-size:.9rem;} #sessions-ul li:last-child{border-bottom:none;} #sessions-ul li span.id{font-family:monospace;color:#333;font-size:.85rem;} .delete-btn{background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px;} .delete-btn:hover{background:#c0392b;} </style></head><body><h1>Sessions for ${escapeHtml(
           ip
         )}</h1><div><a href="/">&larr; Back home</a></div><h2>Sessions</h2><div id="sessions-status" class="status">Connecting...</div><div id="sessions-list" data-init="@get('/sessions/${escapeHtml(
           ip
-        )}/stream')"><ul id="sessions-ul"><li class="empty">(loading)</li></ul></div><h2>Create Session</h2><form id="create-session-form" data-on:submit="@post('/sessions/${escapeHtml(
+        )}/stream')"><ul id="sessions-ul"><li class="empty">(loading)</li></ul></div><div id="delete-session-result" class="result"></div><h2>Create Session</h2><form id="create-session-form" data-on:submit="@post('/sessions/${escapeHtml(
           ip
         )}/create-session', { title: document.querySelector('#new-session-title').value })"><div class="row"><input id="new-session-title" type="text" placeholder="Session title" value="new session" /><button type="submit">Create</button></div><div id="create-session-result" class="result"></div></form><script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.6/bundles/datastar.js"></script></body></html>`;
         return new Response(page, {
