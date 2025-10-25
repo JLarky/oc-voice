@@ -111,48 +111,35 @@
     </style>
   </head>
   <body>
-    <h1>Sessions Demo</h1>
+    <h1>Sessions Demo (Multi-IP)</h1>
 
-    <!-- Hello section -->
-    <section class="section" id="hello-section">
-      <h2>Ask a Question</h2>
-      <form
-        id="hello-form"
-        data-on:submit="@post('/hello', { name: document.querySelector('#user-input').value })"
-      >
-        <div class="row">
-          <input id="user-input" type="text" placeholder="Enter a question" />
-          <button type="submit">Ask</button>
-        </div>
-      </form>
-      <div id="hello-output" class="result"></div>
-    </section>
 
-    <!-- Sessions section -->
+    <!-- IP Addresses section -->
     <section class="section">
-      <h2>Sessions</h2>
-      <div id="sessions-status" class="status">Connecting...</div>
-      <div id="sessions-list" data-init="@get('/sessions/stream')">
-        <ul id="sessions-ul">
+      <h2>IP Addresses</h2>
+      <div id="ips-status" class="status">Connecting...</div>
+       <div id="ips-list" data-init="@get('/ips/stream')">
+        <ul id="ips-ul">
           <li class="empty">(loading)</li>
         </ul>
       </div>
+      <style>.remove-btn{background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.85rem;cursor:pointer;border-radius:3px;} .remove-btn:hover{background:#c0392b;}</style>
 
-      <!-- Create session form -->
+      <!-- Add IP form -->
       <form
-        id="create-session-form"
-        data-on:submit="@post('/create-session', { title: document.querySelector('#new-session-title').value })"
+        id="add-ip-form"
+        data-on:submit="@post('/ips/add'); $ip = ''"
       >
         <div class="row">
           <input
-            id="new-session-title"
+            data-bind:ip
+            name="ip"
             type="text"
-            placeholder="Session title"
-            value="new session"
+            placeholder="Add IP (e.g. 192.168.1.10)"
           />
-          <button type="submit">Create New Session</button>
+          <button type="submit">Add IP</button>
         </div>
-        <div id="create-session-result" class="result"></div>
+        <div id="add-ip-result" class="result"></div>
       </form>
     </section>
 
