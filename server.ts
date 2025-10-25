@@ -872,7 +872,7 @@ const server = Bun.serve({
           ip
         )}">&larr; Back to sessions for ${escapeHtml(
           ip
-        )}</a></div><h2>Messages</h2><div id="messages-status" class="status">Connecting...</div><messages-wrapper><div id="messages-list-container"><div id="messages-list" data-init="@get('/sessions/${escapeHtml(
+        )}</a></div><speech-button></speech-button><h2>Messages</h2><div id="messages-status" class="status">Connecting...</div><messages-wrapper><div id="messages-list-container"><div id="messages-list" data-init="@get('/sessions/${escapeHtml(
           ip
         )}/${escapeHtml(
           sid
