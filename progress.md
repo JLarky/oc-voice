@@ -55,6 +55,7 @@
 - Both primary pages now JSX-based: session detail (`SessionDetailPage`) and sessions list (`SessionsListPage`) render via `Layout`.
 - Inline styles centralized in `Layout` constant; no `dangerouslySetInnerHTML` usage.
 - Delete / clear actions retained using Datastar `data-on` attributes; no manual EventSource usage introduced.
+- Added summarizer session highlighting via ID-only (opacity .5); removed unreliable title substring heuristic; tests cover ID match and mismatch despite 'Summary' title.
 
 ## Updated Remaining Targets
 1. Consolidate any remaining duplicated style rules (review for extraction or minor tweaks).

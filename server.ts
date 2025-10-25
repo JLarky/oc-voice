@@ -92,6 +92,18 @@ import {
 } from "./rendering";
 import { renderSessionsUl, renderIpsUl, renderMessageItems } from "./rendering";
 
+// Read persisted summarizer session id (if any) for highlighting; returns string or undefined
+async function readSummarizerId(): Promise<string | undefined> {
+  try {
+    const text = await Bun.file('playpen/summarizer-config.json').text();
+    const data = JSON.parse(text);
+    const id = data && typeof data.summarizerSessionId === 'string' ? data.summarizerSessionId : undefined;
+    return id;
+  } catch {
+    return undefined;
+  }
+}
+
 // Fetch sessions fresh for an IP (no cache usage, but populates cache for quick create-session reflection)
 async function fetchSessionsFresh(ip: string) {
   const base = resolveBaseUrl(ip);
@@ -169,7 +181,7 @@ function sessionsSSE(ip: string): Response {
       async function push() {
         try {
           const list = await fetchSessionsFresh(ip);
-          const html = renderSessionsUl(ip, list);
+          const html = renderSessionsUl(ip, list, await readSummarizerId());
           const statusHtml = `<div id="sessions-status" class="status">Updated ${new Date().toLocaleTimeString()}</div>`;
           try {
             controller.enqueue(
@@ -716,7 +728,7 @@ const server = Bun.serve({
         await fetchSessionsFresh(ip).catch(() => null);
         const cache = cachedSessionsByIp[ip];
         const list = cache?.list || [];
-        const listHtml = renderSessionsUl(ip, list);
+        const listHtml = renderSessionsUl(ip, list, await readSummarizerId());
         const resultHtml = `<div id="delete-session-result" class="result">${
           deletedOk
             ? "Deleted session: " + escapeHtml(sid)
@@ -799,7 +811,7 @@ const server = Bun.serve({
         await fetchSessionsFresh(ip).catch(() => null);
         const afterCache = cachedSessionsByIp[ip];
         const remainingList = afterCache?.list || [];
-        const listHtml = renderSessionsUl(ip, remainingList);
+        const listHtml = renderSessionsUl(ip, remainingList, await readSummarizerId());
         const resultHtml = `<div id="delete-session-result" class="result">Cleared sessions: ${deletedCount} / ${total}</div>`;
         const stream =
           sendDatastarPatchElements(resultHtml) +

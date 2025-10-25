@@ -13,19 +13,27 @@ import {
 
 describe("renderSessionsUl", () => {
   test("empty sessions yields empty li", () => {
-    const html = renderSessionsUl("127.0.0.1", []);
+    const html = renderSessionsUl("127.0.0.1", [], undefined);
     expect(html).toContain("(no sessions)");
     expect(html).toMatchInlineSnapshot(
       `"<ul id=\"sessions-ul\"><li class=\"empty\">(no sessions)</li></ul>"`,
     );
   });
   test("renders session entries with delete button", () => {
-    const html = renderSessionsUl("127.0.0.1", [{ id: "abc", title: "Title" }]);
+    const html = renderSessionsUl("127.0.0.1", [{ id: "abc", title: "Title" }], undefined);
     expect(html).toContain("abc");
     expect(html).toContain("delete-session");
     expect(html).toMatchInlineSnapshot(
       `"<ul id=\"sessions-ul\"><li><a href=\"/sessions/127.0.0.1/abc\"><span class=\"id\">abc</span></a> - Title <button style=\"background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px\" data-on:click=\"@post('/sessions/127.0.0.1/abc/delete-session')\">✕</button></li></ul>"`,
     );
+  });
+  test("applies opacity when summarizerId matches", () => {
+    const html = renderSessionsUl("127.0.0.1", [{ id: "summ123", title: "Discussion thread" }], "summ123");
+    expect(html).toContain("<li style=\"opacity:.5\">");
+  });
+  test("does not apply opacity when summarizerId mismatch even if title contains summary", () => {
+    const html = renderSessionsUl("127.0.0.1", [{ id: "other", title: "Conversation Summary" }], "summ123");
+    expect(html).not.toContain("opacity:.5");
   });
 });
 

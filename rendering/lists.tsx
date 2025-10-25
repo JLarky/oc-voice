@@ -9,8 +9,9 @@ interface Session {
 interface SessionsUlProps {
   ip: string;
   sessions: Session[];
+  summarizerId?: string;
 }
-function SessionsUl({ ip, sessions }: SessionsUlProps) {
+function SessionsUl({ ip, sessions, summarizerId }: SessionsUlProps) {
   if (!sessions.length)
     return (
       <ul id="sessions-ul">
@@ -20,9 +21,9 @@ function SessionsUl({ ip, sessions }: SessionsUlProps) {
   return (
     <ul id="sessions-ul">
       {sessions.map((s) => {
-        const isSummarizer = (s.title || '').toLowerCase() === 'summarizer';
+        const isSummarizer = summarizerId ? s.id === summarizerId : false;
         return (
-          <li style={isSummarizer ? 'opacity:.55' : undefined}>
+          <li style={isSummarizer ? 'opacity:.5' : undefined}>
             <a href={`/sessions/${ip}/${s.id}`}>
               <span class="id">{s.id}</span>
             </a> - {s.title || '(no title)'}{' '}
@@ -39,9 +40,9 @@ function SessionsUl({ ip, sessions }: SessionsUlProps) {
   );
 }
 
-export function renderSessionsUl(ip: string, sessions: Session[]): string {
+export function renderSessionsUl(ip: string, sessions: Session[], summarizerId?: string): string {
   // Rely on Preact escaping for id/title; ip validated upstream.
-  return render(<SessionsUl ip={ip} sessions={sessions} />);
+  return render(<SessionsUl ip={ip} sessions={sessions} summarizerId={summarizerId} />);
 }
 
 interface IpsUlProps {
