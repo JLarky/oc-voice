@@ -261,3 +261,19 @@ liftHtml("speech-button", {
     });
   }
 });
+liftHtml("submit-on-enter", {
+  init(destroy) {
+    const abort = new AbortController;
+    destroy(() => abort.abort());
+    const root = this;
+    const textarea = root.querySelector("textarea");
+    if (!textarea)
+      return;
+    textarea.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        this.closest("form")?.requestSubmit();
+      }
+    }, abort);
+  }
+});

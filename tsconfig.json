@@ -10,5 +10,6 @@
     "types": ["bun-types", "node"],
     "resolveJsonModule": true
   },
+  "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["playpen"]
 }

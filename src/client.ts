@@ -174,7 +174,6 @@ liftHtml("speech-button", {
       speak(summary);
     }
 
-
     function triggerAutoSpeak() {
       const s = extractSummary();
       if (!s || s === lastSpoken) return;
@@ -215,5 +214,26 @@ liftHtml("speech-button", {
         speechSynthesis.cancel();
       } catch {}
     });
+  },
+});
+
+liftHtml("submit-on-enter", {
+  init(destroy) {
+    const abort = new AbortController();
+    destroy(() => abort.abort());
+
+    const root = this as HTMLElement;
+    const textarea = root.querySelector("textarea");
+    if (!textarea) return;
+    textarea.addEventListener(
+      "keydown",
+      (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          this.closest("form")?.requestSubmit();
+        }
+      },
+      abort
+    );
   },
 });
