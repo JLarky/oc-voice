@@ -19,8 +19,8 @@
 
 ## Suggested Next Targets (Incremental)
 1. Migrate `renderSessionsUl` to JSX (`SessionsUl`) inside `lists.tsx`.
-2. Extract a shared `PageShell` component for repeated `<html><head>` boilerplate.
-3. Migrate `session-detail.ts` to JSX using `PageShell` + `MessageItems`.
+2. (DONE) Extract shared `Layout` component for repeated `<html><head>` boilerplate.
+3. (DONE) Migrate session detail page to JSX using `Layout` + components.
 4. Migrate `sessions-list.ts` using `SessionsUl` + `IpsUl`.
 5. After page migrations, reassess inline styles for potential consolidation.
 
@@ -52,20 +52,20 @@
 ## Progress Since Last Update (2025-10-25)
 - Sessions & IP list fragments migrated to JSX (`lists.tsx`): `renderSessionsUl` and `renderIpsUl` now use Preact rendering and native escaping; manual `escapeHtml` removed for these lists.
 - Introduced dedicated `SessionDetailPage` component (`src/components/SessionDetailPage.tsx`) and server page render helper (`rendering/session-detail.tsx`) producing full HTML via JSX.
-- Page-level migration has begun: session detail page now JSX-based; sessions list page still legacy template string (`sessions-list.ts`).
-- Inline styles on `SessionDetailPage` currently injected via `dangerouslySetInnerHTML` on a `<style>` tag for convenience; consider refactoring to plain text child `<style>...</style>` to align with avoidance of `dangerouslySetInnerHTML` where possible.
+- Both primary pages now JSX-based: session detail (`SessionDetailPage`) and sessions list (`SessionsListPage`) render via `Layout`.
+- Inline styles centralized in `Layout` constant; no `dangerouslySetInnerHTML` usage.
 - Delete / clear actions retained using Datastar `data-on` attributes; no manual EventSource usage introduced.
 
 ## Updated Remaining Targets
-1. Migrate `sessions-list.ts` page to JSX (`SessionsListPage`) using existing list components.
-2. Introduce a lightweight `PageShell` component to centralize `<html><head>` + shared styles/script includes used by both pages.
-3. Replace `dangerouslySetInnerHTML` style injection with a static `<style>` element child nodes or extracted constant string.
-4. Evaluate duplication of per-page inline styles; unify where sensible after both pages migrate.
-5. Add/adjust focused tests for new page/component renderers (ensure structure + safety rather than brittle full snapshots).
+1. Consolidate any remaining duplicated style rules (review for extraction or minor tweaks).
+2. Add/adjust focused tests for new page/component renderers (ensure structure + safety; already partially covered, verify sessions list JSX path).
+3. Consider introducing a `renderComponent()` helper for timing/logging consistency.
+4. Micro-benchmark render performance (optional) before further abstraction.
+5. Evaluate need for additional escaping helpers or guards as data shapes evolve.
 
 ## Notes & Considerations
 - Ensure continued validation upstream for `ip` and `sessionId` before rendering to keep reliance on Preact escaping safe.
-- Maintain small component boundaries; avoid premature abstraction until both pages share enough markup (then `PageShell`).
+- Maintain small component boundaries; avoid premature abstraction until both pages share enough markup (then potential shared specialized fragments beyond `Layout`).
 - Keep existing string-returning export functions (`renderSessionDetailPage`, upcoming `renderSessionsListPage` JSX version) to avoid ripple changes in route handlers for now.
 
 ## Recent Commits (Most Recent First)
@@ -81,5 +81,5 @@
 - 159d4ed start preact migration (initial migration baseline)
 
 ## Next Immediate Action (Pending)
-- Begin JSX migration of sessions list page + introduce `PageShell`.
+- Verify tests (doctype + structural assertions) and commit JSX page migration changes.
 

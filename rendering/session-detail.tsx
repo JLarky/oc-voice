@@ -11,7 +11,7 @@ export function renderSessionDetailPage({
   sessionId,
   sessionTitle,
 }: SessionDetailProps): string {
-  return render(
+  return '<!doctype html>' + render(
     <SessionDetailPage
       ip={ip}
       sessionId={sessionId}

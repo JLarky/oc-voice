@@ -72,7 +72,8 @@ describe("renderSessionDetailPage", () => {
       sessionId: "sess123",
       sessionTitle: "<bad>",
     });
-    expect(html).toContain("&lt;bad&gt;");
+    expect(html).toContain("&lt;bad");
+    expect(html).not.toContain("<bad>");
     expect(html).toContain("@get('/sessions/1.2.3.4/sess123/messages/stream')");
     expect(html).toContain("@get('/sessions/1.2.3.4/sess123/messages/stream')");
     expect(
