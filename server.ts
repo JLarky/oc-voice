@@ -555,7 +555,7 @@ const server = Bun.serve({
           }
           const html = `<div id="create-session-result" class="result">Created session: <a href="/sessions/${escapeHtml(
             ip
-          )}/${escapeHtml(entry.id)}">${escapeHtml(entry.id)}</a></div>`;
+          )}/${escapeHtml(entry.id)}">${escapeHtml(entry.id)}</a></div><script>location.href='/sessions/${escapeHtml(ip)}/${escapeHtml(entry.id)}';</script>`;
           return new Response(sendDatastarPatchElements(html), {
             headers: { "Content-Type": "text/event-stream; charset=utf-8" },
           });
