@@ -28,11 +28,20 @@ Entire repo (server, client, scripts).
 ## Opencode SDK
 - Use `createOpencodeClient({ baseUrl })` then raw HTTP fallback
 - Probe arrays/objects defensively; merge cache without dupes; TTL ≤5s
+- **Response structures vary**: SDK may return `id` directly or nested in `.data` or `.session_id`
+- **Always fallback**: Wrap SDK calls in try/catch, use raw HTTP POST/GET as fallback
+- **Log responses**: Use `console.log()` to debug SDK response structure on first call
+- **Type extraction**: Extract nested fields with optional chaining and provide clear error messages
 
 ## Datastar
 - Client-only; per-page isolated state; `data-*` bindings; sanitize attributes/text
 - Declarative templates; minimal ephemeral state (no secrets); derive values (no redundant state)
 - Never unsanitized `innerHTML`; throttle frequent updates; cleanup listeners on navigation
+- **Lazy loading**: Use `data-init="@get('/url')"` - Datastar auto-processes SSE responses
+- **Forms**: Use `document.querySelector()` in expressions, not `$el.querySelector()`
+- **SSE**: Server sends `event: datastar-patch-elements` with `data: elements <html...` format
+- **No manual EventSource**: Datastar's `@get()/@post()` handle SSE/morphing automatically
+- Reference: https://data-star.dev/guide/getting_started and https://data-star.dev/examples/lazy_load
 
 ## Responses & Performance
 - Return `Response` directly; explicit status codes; SSE lines: `event:` + name, `data:` + JSON, blank line

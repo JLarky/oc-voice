@@ -1,39 +1,168 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Bun Hello UI</title>
+    <title>Sessions Demo - Datastar</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <style>
-      body { font-family: system-ui, sans-serif; margin: 1.5rem; }
-      #sessions-list ul { list-style: none; padding: 0; }
-      #sessions-list li { padding: 4px 6px; border-bottom: 1px solid #eee; font-size: 0.9rem; }
-      #sessions-list li span.id { font-family: monospace; color: #333; }
-      .small { font-size: 0.75rem; color: #666; }
-      .row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
-      form, #create-session-form { margin-top: 1rem; }
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 1.5rem;
+        max-width: 900px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      a {
+        color: #0366d6;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .section {
+        margin: 2rem 0;
+        padding: 1.5rem;
+        border: 1px solid #eee;
+        border-radius: 4px;
+      }
+      .section h2 {
+        margin-top: 0;
+      }
+      .status {
+        font-size: 0.75rem;
+        color: #666;
+        margin-bottom: 1rem;
+      }
+      .row {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+      }
+      input,
+      button {
+        padding: 0.5rem;
+        font-size: 0.95rem;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+      }
+      button {
+        background: #0366d6;
+        color: white;
+        cursor: pointer;
+        border: none;
+      }
+      button:hover {
+        background: #0256c7;
+      }
+      #sessions-ul {
+        list-style: none;
+        padding: 0;
+      }
+      #sessions-ul li {
+        padding: 0.5rem;
+        border-bottom: 1px solid #eee;
+        font-size: 0.9rem;
+      }
+      #sessions-ul li:last-child {
+        border-bottom: none;
+      }
+      #sessions-ul li span.id {
+        font-family: monospace;
+        color: #333;
+        font-size: 0.85rem;
+      }
+      #sessions-ul li a {
+        margin-right: 0.5rem;
+      }
+      #messages-list {
+        border: 1px solid #ddd;
+        padding: 1rem;
+        border-radius: 4px;
+        margin-top: 1rem;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+      .message {
+        padding: 0.5rem;
+        border-bottom: 1px solid #eee;
+        font-size: 0.9rem;
+      }
+      .message:last-child {
+        border-bottom: none;
+      }
+      .message-role {
+        font-weight: bold;
+        color: #0366d6;
+      }
+      .message-text {
+        margin-top: 0.25rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .result {
+        font-size: 0.75rem;
+        color: #666;
+        margin-top: 0.5rem;
+      }
+      .empty {
+        color: #999;
+        font-style: italic;
+      }
     </style>
   </head>
   <body>
     <h1>Sessions Demo</h1>
 
-    <section id="sessions-section">
+    <!-- Hello section -->
+    <section class="section" id="hello-section">
+      <h2>Ask a Question</h2>
+      <form
+        id="hello-form"
+        data-on:submit="@post('/hello', { name: document.querySelector('#user-input').value })"
+      >
+        <div class="row">
+          <input id="user-input" type="text" placeholder="Enter a question" />
+          <button type="submit">Ask</button>
+        </div>
+      </form>
+      <div id="hello-output" class="result"></div>
+    </section>
+
+    <!-- Sessions section -->
+    <section class="section">
       <h2>Sessions</h2>
-      <div id="sessions-status" class="small">Connecting...</div>
-      <div id="sessions-list">
+      <div id="sessions-status" class="status">Connecting...</div>
+      <div id="sessions-list" data-init="@get('/sessions/stream')">
         <ul id="sessions-ul">
-          <li>(loading)</li>
+          <li class="empty">(loading)</li>
         </ul>
       </div>
-      <form id="create-session-form">
+
+      <!-- Create session form -->
+      <form
+        id="create-session-form"
+        data-on:submit="@post('/create-session', { title: document.querySelector('#new-session-title').value })"
+      >
         <div class="row">
-          <input id="new-session-title" type="text" placeholder="Session title" value="new session" />
+          <input
+            id="new-session-title"
+            type="text"
+            placeholder="Session title"
+            value="new session"
+          />
           <button type="submit">Create New Session</button>
         </div>
-        <div id="create-session-result" class="small"></div>
+        <div id="create-session-result" class="result"></div>
       </form>
     </section>
 
-    <script type="module" src="/client.js"></script>
+    <!-- Session page (only shown when on /session/:id page) -->
+    <div id="session-page"></div>
+
+    <!-- Load Datastar from CDN -->
+    <script
+      type="module"
+      src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.6/bundles/datastar.js"
+    ></script>
   </body>
 </html>

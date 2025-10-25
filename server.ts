@@ -95,7 +95,7 @@ async function fetchSessionsFresh() {
             list = rawArr.map((r: any) => ({ id: r.id, title: r.title }));
         }
       } catch {
-        /* ignore raw fallback error */
+        /* ignore */
       }
     }
     return list;
@@ -105,6 +105,34 @@ async function fetchSessionsFresh() {
   }
 }
 
+// Helper to escape HTML
+function escapeHtml(text: string): string {
+  if (!text || typeof text !== "string") {
+    return String(text || "");
+  }
+  return text.replace(
+    /[&<>"]/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+      }[c]!)
+  );
+}
+
+// Helper to build SSE response with datastar-patch-elements event
+function sendDatastarPatchElements(html: string): string {
+  const lines = html.split("\n");
+  let result = "event: datastar-patch-elements\n";
+  lines.forEach((line) => {
+    result += `data: elements ${line}\n`;
+  });
+  result += "\n";
+  return result;
+}
+
 // SSE stream: queries fresh data every 5s (no caching)
 function sessionsSSE(): Response {
   let interval: number | undefined;
@@ -112,12 +140,27 @@ function sessionsSSE(): Response {
     async start(controller) {
       async function push() {
         const list = await fetchSessionsFresh();
-        const data = JSON.stringify({
-          sessions: list,
-          updatedAt: new Date().toISOString(),
-        });
-        controller.enqueue(new TextEncoder().encode(`event: sessions\n`));
-        controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+        // Build HTML patch for sessions list
+        const sessionItems = list.length
+          ? list
+              .map(
+                (s: any) =>
+                  `<li><a href="/session/${s.id}"><span class="id">${escapeHtml(
+                    s.id
+                  )}</span></a> - ${escapeHtml(s.title || "(no title)")}</li>`
+              )
+              .join("")
+          : '<li class="empty">(no sessions)</li>';
+        const html = `<ul id="sessions-ul">${sessionItems}</ul>`;
+        const statusHtml = `<div id="sessions-status" class="status">Updated ${new Date().toLocaleTimeString()}</div>`;
+
+        // Send both patches
+        controller.enqueue(
+          new TextEncoder().encode(sendDatastarPatchElements(statusHtml))
+        );
+        controller.enqueue(
+          new TextEncoder().encode(sendDatastarPatchElements(html))
+        );
       }
       await push();
       interval = setInterval(push, 5000);
@@ -187,12 +230,25 @@ function messagesSSE(sessionId: string): Response {
     async start(controller) {
       async function push() {
         const messages = await fetchMessages(sessionId);
-        const data = JSON.stringify({
-          messages: messages,
-          updatedAt: new Date().toISOString(),
-        });
-        controller.enqueue(new TextEncoder().encode(`event: messages\n`));
-        controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+        // Build HTML patch for messages list
+        const messageItems = messages.length
+          ? messages
+              .map((m: any) => {
+                const role = escapeHtml(m.role || "message");
+                const text = escapeHtml(m.parts?.[0]?.text || m.text || "");
+                return `<div class="message"><div class="message-role">${role}</div><div class="message-text">${text}</div></div>`;
+              })
+              .join("")
+          : '<div class="empty">(no messages)</div>';
+        const html = `<div id="messages-list">${messageItems}</div>`;
+        const statusHtml = `<div id="messages-status" class="status">Updated ${new Date().toLocaleTimeString()}</div>`;
+
+        controller.enqueue(
+          new TextEncoder().encode(sendDatastarPatchElements(statusHtml))
+        );
+        controller.enqueue(
+          new TextEncoder().encode(sendDatastarPatchElements(html))
+        );
       }
       await push();
       interval = setInterval(push, 2000);
@@ -216,60 +272,79 @@ const server = Bun.serve({
   async fetch(req) {
     const url = new URL(req.url);
 
-    // Existing /hello endpoint
-    if (url.pathname === "/hello") {
-      const raw = url.searchParams.get("name") ?? "";
-      if (!raw.trim()) {
-        return new Response(
-          `<div id=\"hello-output\">(enter a question)</div>`,
-          { headers: { "Content-Type": "text/html; charset=utf-8" } }
-        );
-      }
-      const REMOTE_HOST_PORT = 2000;
-      const REMOTE_HOST = `http://${REMOTE_HOST_IP}:${REMOTE_HOST_PORT}`;
+    // /hello endpoint: POST with name, returns HTML
+    if (url.pathname === "/hello" && req.method === "POST") {
       try {
-        // Create session
-        const sessionRes = await fetch(`${REMOTE_HOST}/session`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: "web-echo-session" }),
-        });
-        if (!sessionRes.ok) throw new Error(`session ${sessionRes.status}`);
-        const { id: sessionId } = await sessionRes.json();
-        // Send message
-        const msgRes = await fetch(
-          `${REMOTE_HOST}/session/${sessionId}/message`,
-          {
+        const bodyText = await req.text();
+        let name = "";
+        if (bodyText) {
+          try {
+            const parsed = JSON.parse(bodyText);
+            if (typeof parsed.name === "string" && parsed.name.trim())
+              name = parsed.name.trim();
+          } catch {
+            /* ignore */
+          }
+        }
+        if (!name) {
+          return new Response(
+            sendDatastarPatchElements(
+              `<div id="hello-output" class="result empty">(enter a question)</div>`
+            ),
+            { headers: { "Content-Type": "text/event-stream; charset=utf-8" } }
+          );
+        }
+        const REMOTE_HOST_PORT = 2000;
+        const REMOTE_HOST = `http://${REMOTE_HOST_IP}:${REMOTE_HOST_PORT}`;
+        try {
+          // Create session
+          const sessionRes = await fetch(`${REMOTE_HOST}/session`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ parts: [{ type: "text", text: raw }] }),
-          }
-        );
-        if (!msgRes.ok) throw new Error(`message ${msgRes.status}`);
-        const msgData = await msgRes.json();
-        const parts = Array.isArray(msgData.parts)
-          ? msgData.parts.filter(
-              (p) => p.type === "text" && typeof p.text === "string"
-            )
-          : [];
-        const answerText = parts.map((p) => p.text).join("\n") || "(no answer)";
-        const escaped = answerText.replace(
-          /[&<>\"]/g,
-          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!)
-        );
-        return new Response(
-          `<div id=\"hello-output\"><strong>Answer:</strong> ${escaped}</div>`,
-          { headers: { "Content-Type": "text/html; charset=utf-8" } }
-        );
+            body: JSON.stringify({ title: "web-echo-session" }),
+          });
+          if (!sessionRes.ok) throw new Error(`session ${sessionRes.status}`);
+          const { id: sessionId } = await sessionRes.json();
+          // Send message
+          const msgRes = await fetch(
+            `${REMOTE_HOST}/session/${sessionId}/message`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                parts: [{ type: "text", text: name }],
+              }),
+            }
+          );
+          if (!msgRes.ok) throw new Error(`message ${msgRes.status}`);
+          const msgData = await msgRes.json();
+          const parts = Array.isArray(msgData.parts)
+            ? msgData.parts.filter(
+                (p: any) => p.type === "text" && typeof p.text === "string"
+              )
+            : [];
+          const answerText =
+            parts.map((p: any) => p.text).join("\n") || "(no answer)";
+          const escaped = escapeHtml(answerText);
+          const html = `<div id="hello-output" class="result"><strong>Answer:</strong> ${escaped}</div>`;
+          return new Response(sendDatastarPatchElements(html), {
+            headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+          });
+        } catch (err) {
+          const msg = escapeHtml(
+            `Error contacting ${REMOTE_HOST}: ${(err as Error).message}`
+          );
+          const html = `<div id="hello-output" class="result">${msg}</div>`;
+          return new Response(sendDatastarPatchElements(html), {
+            headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+          });
+        }
       } catch (err) {
-        const msg = (err as Error).message.replace(
-          /[&<>\"]/g,
-          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!)
-        );
-        return new Response(
-          `<div id=\"hello-output\">Error contacting ${REMOTE_HOST}: ${msg}</div>`,
-          { headers: { "Content-Type": "text/html; charset=utf-8" } }
-        );
+        const msg = escapeHtml((err as Error).message);
+        const html = `<div id="hello-output" class="result">Error: ${msg}</div>`;
+        return new Response(sendDatastarPatchElements(html), {
+          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+        });
       }
     }
 
@@ -314,9 +389,42 @@ const server = Bun.serve({
           }
         }
         const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
-        const created = await client.session.create({ body: { title } });
+        let created: any;
+        try {
+          created = await client.session.create({ body: { title } });
+          console.log("SDK session.create raw:", created);
+        } catch (e) {
+          console.warn(
+            "SDK create failed, trying raw endpoint:",
+            (e as Error).message
+          );
+          // Fallback to raw HTTP
+          const rawRes = await fetch(`${OPENCODE_BASE_URL}/session`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title }),
+          });
+          if (!rawRes.ok) throw new Error(`Create ${rawRes.status}`);
+          created = await rawRes.json();
+        }
+
+        // Extract session ID from response (handle nested structures)
+        let sessionId = (created as any)?.id;
+        if (!sessionId) {
+          const data = (created as any)?.data || created;
+          sessionId = data?.id;
+        }
+        if (!sessionId || typeof sessionId !== "string") {
+          throw new Error(
+            `Session creation returned invalid ID: ${JSON.stringify(created)}`
+          );
+        }
+
         // Inject into ephemeral cache immediately
-        const entry = { id: created.id, title: created.title || title };
+        const entry = {
+          id: sessionId,
+          title: (created as any)?.title || title,
+        };
         const now = Date.now();
         if (cachedSessions) {
           const existingIds = new Set(cachedSessions.list.map((s) => s.id));
@@ -325,12 +433,18 @@ const server = Bun.serve({
         } else {
           cachedSessions = { list: [entry], fetchedAt: now };
         }
-        return Response.json({ ok: true, id: entry.id, title: entry.title });
+        const html = `<div id="create-session-result" class="result">Created session: <a href="/session/${escapeHtml(
+          entry.id
+        )}">${escapeHtml(entry.id)}</a></div>`;
+        return new Response(sendDatastarPatchElements(html), {
+          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+        });
       } catch (e) {
-        return Response.json(
-          { ok: false, error: (e as Error).message },
-          { status: 500 }
-        );
+        const msg = escapeHtml((e as Error).message);
+        const html = `<div id="create-session-result" class="result">Error: ${msg}</div>`;
+        return new Response(sendDatastarPatchElements(html), {
+          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+        });
       }
     }
 
@@ -384,7 +498,15 @@ const server = Bun.serve({
           /* ignore outer */
         }
 
-        const page = `<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"/><title>Session ${sid}</title><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .small{font-size:.75rem;color:#666;} a{color:#0366d6;text-decoration:none;} a:hover{text-decoration:underline;} #messages-list{border:1px solid #ddd;padding:1rem;border-radius:4px;margin-top:1rem;max-height:400px;overflow-y:auto;} .message{padding:.5rem;border-bottom:1px solid #eee;font-size:.9rem;} .message-role{font-weight:bold;} .message-text{margin-top:.25rem;white-space:pre-wrap;} </style></head><body><h1>Session ${sid}</h1><div><a href=\"/\">&larr; Back to sessions</a></div><h2>Messages</h2><div id=\"messages-status\" class=\"small\">Connecting...</div><div id=\"messages-list\"><div>(loading)</div></div><h2>Send Message</h2><form id=\"session-message-form\"><div class=\"row\"><input id=\"session-message-input\" type=\"text\" placeholder=\"Enter message\" /><button type=\"submit\">Send</button></div><div id=\"session-message-result\" class=\"small\"></div></form><script>window.__SESSION_ID__='${sid}';</script><script type=\"module\" src=\"/client.js\"></script></body></html>`;
+        const page = `<!doctype html><html lang="en"><head><meta charset="UTF-8"/><title>Session ${escapeHtml(
+          sid
+        )}</title><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:900px;margin-left:auto;margin-right:auto;} a{color:#0366d6;} input,button{padding:.5rem;font-size:.95rem;border:1px solid #ccc;border-radius:3px;} button{background:#0366d6;color:white;cursor:pointer;border:none;} button:hover{background:#0256c7;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .status{font-size:.75rem;color:#666;margin-bottom:1rem;} .result{font-size:.75rem;color:#666;margin-top:.5rem;} #messages-list{border:1px solid #ddd;padding:1rem;border-radius:4px;margin-top:1rem;max-height:400px;overflow-y:auto;} .message{padding:.5rem;border-bottom:1px solid #eee;font-size:.9rem;} .message-role{font-weight:bold;color:#0366d6;} .message-text{margin-top:.25rem;white-space:pre-wrap;word-break:break-word;} </style></head><body><h1>Session ${escapeHtml(
+          sid
+        )}</h1><div><a href="/">&larr; Back to sessions</a></div><h2>Messages</h2><div id="messages-status" class="status">Connecting...</div><div id="messages-list"><div>(loading)</div></div><h2>Send Message</h2><form id="session-message-form" data-on:submit="@post('/session/${escapeHtml(
+          sid
+        )}/message', { text: $el.querySelector('#session-message-input').value })"><div class="row"><input id="session-message-input" type="text" placeholder="Enter message" /><button type="submit">Send</button></div><div id="session-message-result" class="result"></div></form><script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.6/bundles/datastar.js"><\/script><script>setInterval(() => { fetch('/session/${escapeHtml(
+          sid
+        )}/messages/stream').then(r => r.body.getReader().read()).catch(e => console.error(e)); }, 100);<\/script></body></html>`;
         return new Response(page, {
           headers: { "Content-Type": "text/html; charset=utf-8" },
         });
@@ -407,16 +529,19 @@ const server = Bun.serve({
             }
           }
           if (!text)
-            return Response.json(
-              { ok: false, error: "No text" },
-              { status: 400 }
+            return new Response(
+              sendDatastarPatchElements(
+                `<div id="session-message-result" class="result">No text</div>`
+              ),
+              {
+                headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+              }
             );
           console.log("Message send start", { sid, text });
           const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
           let reply: any;
-          let usedFallback = false;
           try {
-            reply = await client.session.prompt({
+            reply = await (client as any).session.prompt?.({
               params: { id: sid },
               body: { parts: [{ type: "text", text }] },
             });
@@ -425,7 +550,6 @@ const server = Bun.serve({
               "SDK prompt error, trying raw endpoint",
               (sdkErr as Error).message
             );
-            usedFallback = true;
             const rawRes = await fetch(
               `${OPENCODE_BASE_URL}/session/${sid}/message`,
               {
@@ -435,16 +559,31 @@ const server = Bun.serve({
               }
             );
             if (rawRes.status === 404) {
-              return Response.json(
-                { ok: false, error: "Session not found" },
-                { status: 404 }
+              return new Response(
+                sendDatastarPatchElements(
+                  `<div id="session-message-result" class="result">Session not found</div>`
+                ),
+                {
+                  headers: {
+                    "Content-Type": "text/event-stream; charset=utf-8",
+                  },
+                  status: 404,
+                }
               );
             }
             if (!rawRes.ok) {
               const detail = await rawRes.text().catch(() => "");
-              return Response.json(
-                { ok: false, error: `Raw ${rawRes.status}`, detail },
-                { status: rawRes.status }
+              const msg = escapeHtml(detail || `HTTP ${rawRes.status}`);
+              return new Response(
+                sendDatastarPatchElements(
+                  `<div id="session-message-result" class="result">Error: ${msg}</div>`
+                ),
+                {
+                  headers: {
+                    "Content-Type": "text/event-stream; charset=utf-8",
+                  },
+                  status: rawRes.status,
+                }
               );
             }
             reply = await rawRes.json().catch(() => ({}));
@@ -453,9 +592,14 @@ const server = Bun.serve({
             !reply ||
             (reply.error && /not\s+found/i.test(String(reply.error)))
           ) {
-            return Response.json(
-              { ok: false, error: "Session not found" },
-              { status: 404 }
+            return new Response(
+              sendDatastarPatchElements(
+                `<div id="session-message-result" class="result">Session not found</div>`
+              ),
+              {
+                headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+                status: 404,
+              }
             );
           }
           const sourceParts = Array.isArray(reply.parts)
@@ -466,27 +610,22 @@ const server = Bun.serve({
                 (p: any) => p && p.type === "text" && typeof p.text === "string"
               )
             : [];
-          return Response.json({
-            ok: true,
-            parts: textParts,
-            fallback: usedFallback,
+          const replyText = textParts.map((p: any) => p.text).join("\n");
+          const escaped = escapeHtml(replyText || "(no reply)");
+          const html = `<div id="session-message-result" class="result">Reply: ${escaped}</div>`;
+          return new Response(sendDatastarPatchElements(html), {
+            headers: { "Content-Type": "text/event-stream; charset=utf-8" },
           });
         } catch (err) {
           console.error("Message route error", (err as Error).message);
-          return Response.json(
-            { ok: false, error: (err as Error).message },
-            { status: 500 }
-          );
+          const msg = escapeHtml((err as Error).message);
+          const html = `<div id="session-message-result" class="result">Error: ${msg}</div>`;
+          return new Response(sendDatastarPatchElements(html), {
+            headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+            status: 500,
+          });
         }
       }
-      /* removed duplicate legacy message handler block */
-    }
-
-    // Serve built client bundle
-    if (url.pathname === "/client.js") {
-      return new Response(Bun.file("public/client.js"), {
-        headers: { "Content-Type": "text/javascript; charset=utf-8" },
-      });
     }
 
     // Serve index
