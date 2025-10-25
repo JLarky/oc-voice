@@ -19,20 +19,22 @@ function SessionsUl({ ip, sessions }: SessionsUlProps) {
     );
   return (
     <ul id="sessions-ul">
-      {sessions.map((s) => (
-        <li>
-          <a href={`/sessions/${ip}/${s.id}`}>
-            <span class="id">{s.id}</span>
-          </a>{" "}
-          - {s.title || "(no title)"}{" "}
-          <button
-            style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px"
-            data-on:click={`@post('/sessions/${ip}/${s.id}/delete-session')`}
-          >
-            ✕
-          </button>
-        </li>
-      ))}
+      {sessions.map((s) => {
+        const isSummarizer = (s.title || '').toLowerCase() === 'summarizer';
+        return (
+          <li style={isSummarizer ? 'opacity:.55' : undefined}>
+            <a href={`/sessions/${ip}/${s.id}`}>
+              <span class="id">{s.id}</span>
+            </a> - {s.title || '(no title)'}{' '}
+            <button
+              style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px"
+              data-on:click={`@post('/sessions/${ip}/${s.id}/delete-session')`}
+            >
+              ✕
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
