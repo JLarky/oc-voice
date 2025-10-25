@@ -62,17 +62,36 @@ function liftHtml(tagName, opts) {
 // src/client.ts
 liftHtml("messages-wrapper", {
   init(destroy) {
-    console.log("hello world 12345", this);
     const root = this;
+    let list = root.querySelector("#messages-list");
+    const ensureList = () => {
+      if (!list)
+        list = root.querySelector("#messages-list");
+    };
     const scroll = () => {
-      const list = root.querySelector("#messages-list");
+      ensureList();
       if (!list)
         return;
       list.scrollTop = list.scrollHeight;
     };
     scroll();
-    const intervalId = setInterval(scroll, 2000);
-    destroy(() => clearInterval(intervalId));
+    const mutObs = new MutationObserver(() => scroll());
+    if (list)
+      mutObs.observe(list, { childList: true, subtree: true });
+    else
+      mutObs.observe(root, { childList: true, subtree: true });
+    const resizeObs = new ResizeObserver(() => scroll());
+    if (list)
+      resizeObs.observe(list);
+    else
+      resizeObs.observe(root);
+    const onWinResize = () => scroll();
+    window.addEventListener("resize", onWinResize);
+    destroy(() => {
+      mutObs.disconnect();
+      resizeObs.disconnect();
+      window.removeEventListener("resize", onWinResize);
+    });
   }
 });
 liftHtml("speech-button", {
