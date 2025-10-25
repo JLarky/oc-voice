@@ -210,16 +210,33 @@ const server = Bun.serve({
             console.log('Sending remote message via SDK', { sid, text });
             try {
               const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
-              const reply = await client.session.prompt({
-                params: { id: sid },
-                body: { parts: [{ type: "text", text }] }
-              });
-              const textParts = Array.isArray(reply.parts)
-                ? reply.parts.filter(p => p.type === "text" && typeof p.text === "string")
+              let reply: any;
+              try {
+                reply = await client.session.prompt({
+                  params: { id: sid },
+                  body: { parts: [{ type: "text", text }] }
+                });
+              } catch (sdkErr) {
+                console.warn('SDK prompt failed, trying raw endpoint', (sdkErr as Error).message);
+                // Raw fetch fallback
+                const rawRes = await fetch(`${OPENCODE_BASE_URL}/session/${sid}/message`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ parts: [{ type: 'text', text }] })
+                });
+                if (!rawRes.ok) {
+                  const rawText = await rawRes.text().catch(() => '');
+                  throw new Error(`Raw endpoint ${rawRes.status}: ${rawText}`);
+                }
+                reply = await rawRes.json().catch(() => ({}));
+              }
+              const partsSource = Array.isArray(reply.parts) ? reply.parts : (reply.data?.parts || []);
+              const textParts = Array.isArray(partsSource)
+                ? partsSource.filter((p: any) => p && p.type === 'text' && typeof p.text === 'string')
                 : [];
               return Response.json({ ok: true, parts: textParts });
             } catch (err) {
-              console.error('SDK prompt error', (err as Error).message);
+              console.error('Message send error', (err as Error).message);
               return Response.json({ ok: false, error: (err as Error).message }, { status: 500 });
             }
         } catch (e) {
