@@ -3,6 +3,7 @@
 const port = 3000;
 
 import { createOpencodeClient } from "@opencode-ai/sdk";
+import { listMessages } from "./src/oc-client";
 
 // Get the remote host from command line arg or env var (e.g., 192.168.215.4)
 const REMOTE_HOST_IP =
@@ -129,37 +130,14 @@ function sessionsSSE(): Response {
 // Fetch messages for a session (no caching)
 async function fetchMessages(sessionId: string) {
   try {
-    const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
-    let messages: any[] = [];
+    const textMessages = await listMessages(OPENCODE_BASE_URL, sessionId);
 
-    // Try SDK method first
-    try {
-      const detail = await (client as any).session.get?.({
-        params: { id: sessionId },
-      });
-      if (detail && Array.isArray(detail.messages)) {
-        messages = detail.messages;
-      }
-    } catch {
-      /* ignore */
-    }
-
-    // Fallback to raw endpoint if SDK didn't work
-    if (!messages.length) {
-      try {
-        const rawRes = await fetch(`${OPENCODE_BASE_URL}/session/${sessionId}`);
-        if (rawRes.ok) {
-          const rawJson = await rawRes.json().catch(() => null);
-          if (rawJson && Array.isArray(rawJson.messages)) {
-            messages = rawJson.messages;
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-
-    return messages;
+    // Convert back to message format for template compatibility
+    return textMessages.map((msg) => ({
+      role: msg.role,
+      text: msg.texts.join("\n"),
+      parts: msg.texts.map((text) => ({ type: "text", text })),
+    }));
   } catch (e) {
     console.error(
       "Failed to fetch messages for session",
@@ -449,11 +427,11 @@ const server = Bun.serve({
           sid
         )}</title><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:900px;margin-left:auto;margin-right:auto;} a{color:#0366d6;} input,button{padding:.5rem;font-size:.95rem;border:1px solid #ccc;border-radius:3px;} button{background:#0366d6;color:white;cursor:pointer;border:none;} button:hover{background:#0256c7;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .status{font-size:.75rem;color:#666;margin-bottom:1rem;} .result{font-size:.75rem;color:#666;margin-top:.5rem;} #messages-list{border:1px solid #ddd;padding:1rem;border-radius:4px;margin-top:1rem;max-height:400px;overflow-y:auto;} .message{padding:.5rem;border-bottom:1px solid #eee;font-size:.9rem;} .message-role{font-weight:bold;color:#0366d6;} .message-text{margin-top:.25rem;white-space:pre-wrap;word-break:break-word;} </style></head><body><h1>Session ${escapeHtml(
           sid
-        )}</h1><div><a href="/">&larr; Back to sessions</a></div><h2>Messages</h2><div id="messages-status" class="status">Connecting...</div><div id="messages-list"><div>(loading)</div></div><h2>Send Message</h2><form id="session-message-form" data-on:submit="@post('/session/${escapeHtml(
+        )}</h1><div><a href="/">&larr; Back to sessions</a></div><h2>Messages</h2><div id="messages-status" class="status">Connecting...</div><div id="messages-list" data-init="@get('/session/${escapeHtml(
           sid
-        )}/message', { text: $el.querySelector('#session-message-input').value })"><div class="row"><input id="session-message-input" type="text" placeholder="Enter message" /><button type="submit">Send</button></div><div id="session-message-result" class="result"></div></form><script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.6/bundles/datastar.js"><\/script><script>setInterval(() => { fetch('/session/${escapeHtml(
+        )}/messages/stream')"><div>(loading)</div></div><h2>Send Message</h2><form id="session-message-form" data-on:submit="@post('/session/${escapeHtml(
           sid
-        )}/messages/stream').then(r => r.body.getReader().read()).catch(e => console.error(e)); }, 100);<\/script></body></html>`;
+        )}/message', { text: $el.querySelector('#session-message-input').value })"><div class="row"><input id="session-message-input" type="text" placeholder="Enter message" /><button type="submit">Send</button></div><div id="session-message-result" class="result"></div></form><script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.6/bundles/datastar.js"><\/script></body></html>`;
         return new Response(page, {
           headers: { "Content-Type": "text/html; charset=utf-8" },
         });
