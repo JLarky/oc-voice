@@ -20,7 +20,7 @@ interface TextMessage {
 }
 
 export const FIRST_MESSAGE_INSTRUCTION =
-  "I'm driving right now, because i use voice-to-text don't be afraid to ask for clarification. You don't need to be very terse when you respond, I use voice-to-text feature that will summarize your response for me, and once I part I can take a look at the code or your full responses. Also try to not mention that I use voice-to-text feature. Okay, so here it goes:";
+  "I'm driving right now, because i use voice-to-text don't be afraid to ask for clarification. You don't need to be very terse when you respond, I use voice-to-text feature that will summarize your response for me, and once I part I can take a look at the code or your full responses. Also try to not mention that I use voice-to-text feature. Only commit changes if I ask for it. Never push or create PRs, I will do that myself later. Okay, so here it goes:";
 
 export async function listMessages(
   remoteHost: string,
