@@ -41,6 +41,10 @@ Entire repo (server, client, scripts).
 - **Forms**: Use `document.querySelector()` in expressions, not `$el.querySelector()`
 - **SSE**: Server sends `event: datastar-patch-elements` with `data: elements <html...` format
 - **No manual EventSource**: Datastar's `@get()/@post()` handle SSE/morphing automatically
+- **Form data binding**: `data-bind:fieldName` + `name="fieldName"` creates reactive signal; FormData sent to backend as `{fieldname: "...", fieldName: ""}` (both cases)
+- **Form submission**: Use `data-on:submit="@post('/endpoint'); $fieldName = ''"` to send FormData and clear inputs via signal reset
+- **Backend form parsing**: Check both camelCase and lowercase field names for robustness; handle FormData gracefully
+- **Signal lifecycle**: Signals auto-sync with inputs; clearing `$signal = ''` both updates UI and state; prefer signals over DOM queries
 - Reference: https://data-star.dev/guide/getting_started and https://data-star.dev/examples/lazy_load
 
 ## Responses & Performance

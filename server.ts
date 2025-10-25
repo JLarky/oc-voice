@@ -382,7 +382,6 @@ const server = Bun.serve({
         try {
           const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
           let exists = false;
-          console.log("Session page check start", sid);
           // Try direct get (if available on SDK)
           try {
             const detail = await (client as any).session.get?.({
@@ -415,10 +414,8 @@ const server = Bun.serve({
             }
           }
           if (!exists) {
-            console.log("Session not found after checks", sid);
             return Response.redirect("/", 302);
           }
-          console.log("Session exists", sid);
         } catch {
           /* ignore outer */
         }
@@ -431,7 +428,7 @@ const server = Bun.serve({
           sid
         )}/messages/stream')"><div>(loading)</div></div><h2>Send Message</h2><form id="session-message-form" data-on:submit="@post('/session/${escapeHtml(
           sid
-        )}/message', { text: $el.querySelector('#session-message-input').value })"><div class="row"><input id="session-message-input" type="text" placeholder="Enter message" /><button type="submit">Send</button></div><div id="session-message-result" class="result"></div></form><script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.6/bundles/datastar.js"><\/script></body></html>`;
+        )}/message'); $messageText = ''"><div class="row"><input id="session-message-input" data-bind:messageText name="messageText" type="text" placeholder="Enter message" /><button type="submit">Send</button></div><div id="session-message-result" class="result"></div></form><script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.6/bundles/datastar.js"><\/script></body></html>`;
         return new Response(page, {
           headers: { "Content-Type": "text/html; charset=utf-8" },
         });
@@ -448,7 +445,30 @@ const server = Bun.serve({
           if (bodyText) {
             try {
               const parsed = JSON.parse(bodyText);
-              if (typeof parsed.text === "string") text = parsed.text.trim();
+              // Handle different field names from form submission
+              if (
+                typeof parsed.messageText === "string" &&
+                parsed.messageText.trim()
+              ) {
+                text = parsed.messageText.trim();
+              } else if (
+                typeof parsed.messagetext === "string" &&
+                parsed.messagetext.trim()
+              ) {
+                text = parsed.messagetext.trim();
+              } else if (
+                typeof parsed.text === "string" &&
+                parsed.text.trim()
+              ) {
+                text = parsed.text.trim();
+              } else if (Array.isArray(parsed.parts)) {
+                const textPart = parsed.parts.find(
+                  (p: any) => p?.type === "text"
+                );
+                if (textPart && typeof textPart.text === "string") {
+                  text = textPart.text.trim();
+                }
+              }
             } catch {
               /* ignore */
             }
