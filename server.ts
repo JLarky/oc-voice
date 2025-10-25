@@ -214,14 +214,21 @@ const server = Bun.serve({
               } catch { /* ignore */ }
             }
             if (!text) return Response.json({ ok: false, error: "No text" }, { status: 400 });
-            const remoteRes = await fetch(`${OPENCODE_BASE_URL}/session/${sid}/message`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ parts: [{ type: "text", text }] })
-            });
-            if (!remoteRes.ok) return Response.json({ ok: false, error: `Remote ${remoteRes.status}` }, { status: 500 });
-            const remoteJson = await remoteRes.json();
-            return Response.json({ ok: true, parts: remoteJson.parts || [] });
+            console.log('Sending remote message via SDK', { sid, text });
+            try {
+              const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
+              const reply = await client.session.prompt({
+                params: { id: sid },
+                body: { parts: [{ type: "text", text }] }
+              });
+              const textParts = Array.isArray(reply.parts)
+                ? reply.parts.filter(p => p.type === "text" && typeof p.text === "string")
+                : [];
+              return Response.json({ ok: true, parts: textParts });
+            } catch (err) {
+              console.error('SDK prompt error', (err as Error).message);
+              return Response.json({ ok: false, error: (err as Error).message }, { status: 500 });
+            }
         } catch (e) {
           return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });
         }
