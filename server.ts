@@ -13,8 +13,18 @@ async function fetchSessions() {
   try {
     const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
     const remote = await client.session.list();
-    if (!Array.isArray(remote)) return [] as { id: string; title?: string }[];
-    return remote.map(r => ({ id: r.id, title: r.title }));
+    console.log('SDK session.list raw:', remote);
+    if (Array.isArray(remote)) {
+      return remote.map(r => ({ id: r.id, title: r.title }));
+    }
+    // Handle possible wrapped shape { data: [...] } or { sessions: [...] }
+    if (remote && typeof remote === 'object') {
+      const arr = (remote as any).data || (remote as any).sessions;
+      if (Array.isArray(arr)) {
+        return arr.map((r: any) => ({ id: r.id, title: r.title }));
+      }
+    }
+    return [] as { id: string; title?: string }[];
   } catch (e) {
     console.error("Failed to list sessions via SDK", (e as Error).message);
     return [];
