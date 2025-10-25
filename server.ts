@@ -193,19 +193,55 @@ const server = Bun.serve({
       }
       if (parts.length === 3 && parts[2] === "message" && req.method === "POST") {
         const sid = parts[1];
-        const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
-        const list = await client.session.list();
-        const exists = Array.isArray(list) && list.some(s => s.id === sid);
-        if (!exists) return Response.json({ ok: false, error: "Session not found" }, { status: 404 });
         try {
           const bodyText = await req.text();
-            let text = "";
-            if (bodyText) {
-              try {
-                const parsed = JSON.parse(bodyText);
-                if (typeof parsed.text === "string") text = parsed.text.trim();
-              } catch { /* ignore */ }
+          let text = "";
+          if (bodyText) {
+            try {
+              const parsed = JSON.parse(bodyText);
+              if (typeof parsed.text === "string") text = parsed.text.trim();
+            } catch { /* ignore */ }
+          }
+          if (!text) return Response.json({ ok: false, error: "No text" }, { status: 400 });
+          console.log("Message send start", { sid, text });
+          const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
+          let reply: any;
+          let usedFallback = false;
+          try {
+            reply = await client.session.prompt({
+              params: { id: sid },
+              body: { parts: [{ type: "text", text }] }
+            });
+          } catch (sdkErr) {
+            console.warn("SDK prompt error, trying raw endpoint", (sdkErr as Error).message);
+            usedFallback = true;
+            const rawRes = await fetch(`${OPENCODE_BASE_URL}/session/${sid}/message`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ parts: [{ type: "text", text }] })
+            });
+            if (rawRes.status === 404) {
+              return Response.json({ ok: false, error: "Session not found" }, { status: 404 });
             }
+            if (!rawRes.ok) {
+              const detail = await rawRes.text().catch(() => "");
+              return Response.json({ ok: false, error: `Raw ${rawRes.status}`, detail }, { status: rawRes.status });
+            }
+            reply = await rawRes.json().catch(() => ({}));
+          }
+          if (!reply || (reply.error && /not\s+found/i.test(String(reply.error)))) {
+            return Response.json({ ok: false, error: "Session not found" }, { status: 404 });
+          }
+          const sourceParts = Array.isArray(reply.parts) ? reply.parts : (reply.data?.parts || []);
+          const textParts = Array.isArray(sourceParts)
+            ? sourceParts.filter((p: any) => p && p.type === "text" && typeof p.text === "string")
+            : [];
+          return Response.json({ ok: true, parts: textParts, fallback: usedFallback });
+        } catch (err) {
+          console.error("Message route error", (err as Error).message);
+          return Response.json({ ok: false, error: (err as Error).message }, { status: 500 });
+        }
+      }
             if (!text) return Response.json({ ok: false, error: "No text" }, { status: 400 });
             console.log('Sending remote message via SDK', { sid, text });
             try {
