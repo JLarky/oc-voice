@@ -47,6 +47,12 @@ Entire repo (server, client, scripts).
 - **Signal lifecycle**: Signals auto-sync with inputs; clearing `$signal = ''` both updates UI and state; prefer signals over DOM queries
 - Reference: https://data-star.dev/guide/getting_started and https://data-star.dev/examples/lazy_load
 
+## liftHtml
+- Define lightweight custom elements with `liftHtml('tag', { init(){ console.log(this) } })`
+- Use for page-scoped behavior (e.g. auto-scroll messages) not for data fetching that Datastar already handles
+- Keep DOM queries scoped to `this` (root custom element) to avoid unintended matches
+- it doesn't use Shadow DOM
+
 ## Responses & Performance
 - Return `Response` directly; explicit status codes; SSE lines: `event:` + name, `data:` + JSON, blank line
 - Lightweight in-memory caches; dedupe by `id`; avoid unbounded growth

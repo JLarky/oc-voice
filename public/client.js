@@ -61,7 +61,7 @@ function liftHtml(tagName, opts) {
 
 // src/client.ts
 liftHtml("messages-wrapper", {
-  init() {
+  init(destroy) {
     console.log("hello world 12345", this);
     const root = this;
     const scroll = () => {
@@ -72,6 +72,6 @@ liftHtml("messages-wrapper", {
     };
     scroll();
     const intervalId = setInterval(scroll, 2000);
-    root.__autoScrollInterval = intervalId;
+    destroy(() => clearInterval(intervalId));
   }
 });
