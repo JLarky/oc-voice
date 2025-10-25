@@ -5,33 +5,38 @@ import { liftHtml } from "@lift-html/core";
 liftHtml("messages-wrapper", {
   init(destroy) {
     const root = this as HTMLElement;
-    let list = root.querySelector("#messages-list") as HTMLElement | null;
-    const ensureList = () => {
-      if (!list)
-        list = root.querySelector("#messages-list") as HTMLElement | null;
-    };
     let rafId: number | null = null;
     const scroll = () => {
       if (rafId !== null) cancelAnimationFrame(rafId);
-      ensureList();
+      const list = root.querySelector("#messages-list") as HTMLElement | null;
       if (!list) return;
       // Defer until after layout
       rafId = requestAnimationFrame(() => {
         rafId = null;
-        list!.scrollTop = list!.scrollHeight;
+        list.scrollTop = list.scrollHeight;
       });
     };
     scroll();
 
-    // Scroll when new messages are added
-    const mutObs = new MutationObserver(() => scroll());
-    if (list) mutObs.observe(list, { childList: true, subtree: true });
-    else mutObs.observe(root, { childList: true, subtree: true });
+    // Scroll when mutations occur (handles Datastar morphing and new messages)
+    const mutObs = new MutationObserver((mutations) => {
+      // Debounce multiple mutations in quick succession
+      scroll();
+    });
+    // Observe the root for all mutations (catches Datastar DOM replacements)
+    mutObs.observe(root, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
 
     // Scroll when resized (viewport or element size changes)
     const resizeObs = new ResizeObserver(() => scroll());
+    // Observe the messages-list if it exists, otherwise observe root
+    const list = root.querySelector("#messages-list");
     if (list) resizeObs.observe(list);
     else resizeObs.observe(root);
+
     const onWinResize = () => scroll();
     window.addEventListener("resize", onWinResize);
 
