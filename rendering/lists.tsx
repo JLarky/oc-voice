@@ -1,12 +1,28 @@
-// lists.tsx - reusable list item renderers migrated to JSX (only renderIpsUl converted now)
+// lists.tsx - reusable list item renderers migrated to JSX (sessions + IP lists)
 import { h } from 'preact';
 import { render } from 'preact-render-to-string';
-import { escapeHtml } from './escape';
 
-export function renderSessionsUl(ip: string, sessions: { id: string; title?: string }[]): string {
-  // TEMP: keep original string implementation until we migrate sessions list
-  const items = sessions.length ? sessions.map((s) => `<li><a href="/sessions/${escapeHtml(ip)}/${escapeHtml(s.id)}"><span class="id">${escapeHtml(s.id)}</span></a> - ${escapeHtml(s.title || '(no title)')} <button style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px" data-on:click="@post('/sessions/${escapeHtml(ip)}/${escapeHtml(s.id)}/delete-session')">✕</button></li>`).join('') : '<li class="empty">(no sessions)</li>';
-  return `<ul id="sessions-ul">${items}</ul>`;
+interface Session { id: string; title?: string }
+interface SessionsUlProps { ip: string; sessions: Session[] }
+function SessionsUl({ ip, sessions }: SessionsUlProps) {
+  if (!sessions.length) return <ul id="sessions-ul"><li class="empty">(no sessions)</li></ul>;
+  return (
+    <ul id="sessions-ul">
+      {sessions.map((s) => (
+        <li>
+          <a href={`/sessions/${ip}/${s.id}`}><span class="id">{s.id}</span></a> - {s.title || '(no title)'} <button
+            style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px"
+            data-on:click={`@post('/sessions/${ip}/${s.id}/delete-session')`}
+          >✕</button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function renderSessionsUl(ip: string, sessions: Session[]): string {
+  // Rely on Preact escaping for id/title; ip validated upstream.
+  return render(<SessionsUl ip={ip} sessions={sessions} />);
 }
 
 interface IpsUlProps { ips: string[] }
