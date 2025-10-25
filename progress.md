@@ -81,6 +81,25 @@
 - 6b0d8f2 refactor(render): extract HTML templates and helpers from server for reuse and maintainability
 - 159d4ed start preact migration (initial migration baseline)
 
-## Next Immediate Action (Pending)
-- Verify tests (doctype + structural assertions) and commit JSX page migration changes.
+## Next Immediate Action (Updated)
+- Remove obsolete intermediate renderers (DONE: renderMessageItems eliminated; MessagesList uses <MessageItems/> directly to avoid double encoding) and expand JSX coverage.
+
+## Latest Update (Double Encoding Removal)
+- Dropped `renderMessageItems` function; now `renderMessagesList` composes `MessageItems` directly, preventing prior double-encoding path (HTML string -> JSX re-wrap).
+- Added `renderMessagesList` tests asserting escaping, badges, empty state.
+- Confirmed Preact handles escaping for message text and summary; no manual `escapeHtml` needed before JSX render.
+
+## Additional JSX Opportunities
+1. Unify error/result HTML blocks: replace remaining inline `<div id="add-ip-result" ...>` string constructions in IP remove routes with `renderResultDiv` for consistency and central escaping.
+2. Consolidate status/result creation: create a generic `<Result id text />` component wrapper to reduce multiple helpers (`renderStatusDiv`, `renderResultDiv`, etc.) while keeping small functions; measure if over-abstraction helps.
+3. Convert remaining raw string responses in session delete/clear routes to JSX helpers (some already JSX; ensure all error paths use helpers, not manual string building).
+4. Introduce a `renderComponent(<Comp />)` utility for server-side timing/logging around `preact-render-to-string` calls to standardize future instrumentation.
+5. Migrate message reply/error/"No text" helpers to direct JSX components exported (keep string-returning functions for route compatibility) to simplify testing via single component snapshot.
+6. Replace manual summary badge span construction with a tiny `<SummaryBadge action={boolean} />` component to concentrate style decisions.
+7. Consider a single `Fragments` module exporting components and a thin `renderX()` wrapper per fragment to gradually allow direct component composition in routes once desired.
+
+## Near-Term Plan
+- Implement opportunity (1) & (3) next (low risk, improves consistency).
+- Evaluate (4) after measuring any noticeable render hot path cost (baseline micro-benchmark pending).
+- Keep string-returning facade until routes comfortable accepting components or a unified renderer.
 
