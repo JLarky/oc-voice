@@ -1,4 +1,5 @@
 import { recentMessagesHash, shouldReuseSummary } from './hash';
+import { createHash } from 'crypto';
 
 function msg(role: string, text: string){ return { role, text }; }
 
@@ -23,6 +24,20 @@ describe('recentMessagesHash', () => {
     const changedText = recentMessagesHash([ msg('user','hi!'), msg('assistant','there') ]);
     expect(base).not.toBe(changedRole);
     expect(base).not.toBe(changedText);
+  });
+
+  test('includes summarizationPrompt seed', () => {
+    const messages = [ msg('user','alpha'), msg('assistant','beta') ];
+    const withPrompt = recentMessagesHash(messages);
+    // Compute hash without the prompt seed to ensure mismatch
+    const hash = createHash('sha256');
+    for (const m of messages) {
+      const role = (m.role || 'message').toLowerCase();
+      const text = (m.text || '').replace(/\s+/g, ' ').trim();
+      hash.update(role + ':' + text + '\n');
+    }
+    const withoutPrompt = hash.digest('hex');
+    expect(withPrompt).not.toBe(withoutPrompt);
   });
 });
 
