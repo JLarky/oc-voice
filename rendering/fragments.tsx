@@ -1,6 +1,7 @@
 // fragments.tsx - small JSX helpers for HTML fragments previously in server.ts
 import { h } from 'preact';
 import { render } from 'preact-render-to-string';
+import { MessageItems, Msg } from './MessageItems';
 
 interface StatusDivProps { id: string; text: string }
 function StatusDiv({ id, text }: StatusDivProps) {
@@ -65,12 +66,12 @@ export function renderNoTextResult(): string {
 }
 
 interface MessagesListProps {
-  items: string[]; // individual rendered message item fragments
+  messages: Msg[];
   summaryText: string;
   actionFlag: boolean;
   totalCount: number;
 }
-function MessagesList({ items, summaryText, actionFlag, totalCount }: MessagesListProps) {
+function MessagesList({ messages, summaryText, actionFlag, totalCount }: MessagesListProps) {
   const badge = actionFlag ? (
     <span style="background:#ffd54f;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">action</span>
   ) : (
@@ -78,9 +79,7 @@ function MessagesList({ items, summaryText, actionFlag, totalCount }: MessagesLi
   );
   return (
     <div id="messages-list">
-      {items.map((html, i) => (
-        <div class="message" key={i}>{/* html already escaped */}{html}</div>
-      ))}
+      <MessageItems messages={messages} />
       {totalCount > 0 && (
         <div class="messages-summary" style="opacity:.55;margin-top:4px">
           summary: {summaryText} {badge}
@@ -89,8 +88,8 @@ function MessagesList({ items, summaryText, actionFlag, totalCount }: MessagesLi
     </div>
   );
 }
-export function renderMessagesList(items: string[], summaryText: string, actionFlag: boolean, totalCount: number): string {
-  return render(<MessagesList items={items} summaryText={summaryText} actionFlag={actionFlag} totalCount={totalCount} />);
+export function renderMessagesList(messages: Msg[], summaryText: string, actionFlag: boolean, totalCount: number): string {
+  return render(<MessagesList messages={messages} summaryText={summaryText} actionFlag={actionFlag} totalCount={totalCount} />);
 }
 
 // Auto-scroll script SSE event payload

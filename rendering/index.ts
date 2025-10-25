@@ -4,4 +4,4 @@ export { sendDatastarPatchElements } from "./datastar";
 export { renderSessionsListPage } from "./sessions-list";
 export { renderSessionDetailPage } from "./session-detail";
 export { renderSessionsUl, renderIpsUl } from "./lists";
-export { renderMessageItems } from "./messages";
+// renderMessageItems removed; use renderMessagesList via fragments instead

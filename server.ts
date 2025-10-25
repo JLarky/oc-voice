@@ -91,7 +91,7 @@ import {
   renderSessionsListPage,
 } from "./rendering";
 import { renderStatusDiv, renderResultDiv, renderSessionCreateResult, renderSessionDeleteResult, renderSessionsClearedResult, renderMessageReplyResult, renderMessageErrorResult, renderNoTextResult, renderMessagesList, renderAutoScrollScriptEvent } from './rendering/fragments';
-import { renderSessionsUl, renderIpsUl, renderMessageItems } from "./rendering";
+import { renderSessionsUl, renderIpsUl } from "./rendering";
 
 // Read persisted summarizer session id (if any) for highlighting; returns string or undefined
 async function readSummarizerId(): Promise<string | undefined> {
@@ -247,7 +247,8 @@ function messagesSSE(ip: string, sessionId: string): Response {
           const messages = await fetchMessages(ip, sessionId);
           const displayMessages =
             messages.length > 10 ? messages.slice(-10) : messages;
-          const messageItems = renderMessageItems(displayMessages as any);
+          // Pass raw messages directly; MessageItems will escape content
+          const messageItems = displayMessages;
           // Build or reuse summarizer-based summary using dedicated summarizer session (non-blocking)
           let summaryText = "(no recent messages)";
           const skipSummary = messages.length === 0;
@@ -355,7 +356,7 @@ function messagesSSE(ip: string, sessionId: string): Response {
           const actionFlag = cacheAfter
             ? cacheAfter.action
             : /\|\s*action\s*=\s*yes/i.test(summaryText);
-          const html = renderMessagesList(messageItems.split(/(?<=<\/div>)/g).filter(Boolean), escapeHtml(summaryText), actionFlag, totalCount);
+          const html = renderMessagesList(messageItems as any, summaryText, actionFlag, totalCount);
           const statusHtml = renderStatusDiv('messages-status', `Updated ${new Date().toLocaleTimeString()}`);
           try {
             controller.enqueue(

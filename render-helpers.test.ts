@@ -2,7 +2,7 @@ import { describe, test, expect } from "bun:test";
 import {
   renderSessionsUl,
   renderIpsUl,
-  renderMessageItems,
+
   escapeHtml,
   renderSessionDetailPage,
   renderSessionsListPage,
@@ -55,23 +55,12 @@ describe("renderIpsUl", () => {
   });
 });
 
-describe("renderMessageItems", () => {
-  test("empty messages yields empty div", () => {
-    const html = renderMessageItems([]);
-    expect(html).toContain("(no messages)");
-    expect(html).toMatchInlineSnapshot(
-      `"<div class=\"empty\">(no messages)</div>"`,
-    );
-  });
-  test("renders role and text escaped", () => {
-    const html = renderMessageItems([
-      { role: "user", parts: [{ type: "text", text: "<script>" }] },
-    ]);
-    // Preact escapes '<' but not necessarily closing '>' after text nodes; we only ensure opening tag is escaped and raw <script> not present.
-    expect(html).toContain("&lt;script");
-    expect(html).not.toContain("<script>");
-  });
-});
+// renderMessageItems removed (messages now rendered via renderMessagesList with MessageItems)
+// Keeping tests focused on other helpers.
+
+
+
+
 
 describe("renderSessionDetailPage", () => {
   test("renders escaped title and key sections", () => {
