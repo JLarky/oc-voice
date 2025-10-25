@@ -1,3 +1,4 @@
+import { describe, test, expect } from "bun:test";
 import { recentMessagesHash, shouldReuseSummary } from "./hash";
 import { createHash } from "crypto";
 

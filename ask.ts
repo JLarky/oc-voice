@@ -37,7 +37,9 @@ const messageRes = await fetch(`${HOST}/session/${sessionId}/message`, {
 const data = await messageRes.json();
 
 const parts = Array.isArray(data.parts)
-  ? data.parts.filter((p) => p.type === "text" && typeof p.text === "string")
+  ? data.parts.filter((p: any) => p.type === "text" && typeof p.text === "string")
   : [];
-const answer = parts.map((p) => p.text).join("\n");
+const answer = parts.map((p: any) => p.text).join("\n");
 console.log("✅ Answer:", answer || "No answer text parts found.");
+export {};
+ 

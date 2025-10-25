@@ -1,3 +1,4 @@
+import { describe, it, expect } from "bun:test";
 import { summarizeMessages } from "./oc-client";
 
 // Minimal mock utilities

@@ -1,7 +1,9 @@
+interface TextPart { type: 'text'; text: string }
 interface MessagePart {
-  type: string;
+  type: 'text' | string;
   text?: string;
 }
+function isTextPart(p: any): p is TextPart { return p && p.type === 'text' && typeof p.text === 'string'; }
 
 interface MessageInfo {
   role?: string;
@@ -18,6 +20,8 @@ interface TextMessage {
   role: string;
   texts: string[];
 }
+
+function errMsg(e: unknown): string { return e instanceof Error ? e.message : String(e); }
 
 export const FIRST_MESSAGE_INSTRUCTION =
   "I'm driving right now, because i use voice-to-text don't be afraid to ask for clarification. You don't need to be very terse when you respond, I use voice-to-text feature that will summarize your response for me, and once I part I can take a look at the code or your full responses. Also try to not mention that I use voice-to-text feature. Only commit changes if I ask for it. Never push or create PRs, I will do that myself later. Okay, so here it goes:";
@@ -68,22 +72,20 @@ export async function sendMessage(
       const err = reply && reply.error ? String(reply.error) : `HTTP ${status}`;
       return { ok: false, status, replyTexts: [], error: err, raw: reply };
     }
-    const sourceParts = Array.isArray(reply.parts)
+    const sourceParts: unknown = Array.isArray(reply.parts)
       ? reply.parts
-      : reply.data?.parts || [];
-    const textParts = Array.isArray(sourceParts)
-      ? sourceParts.filter(
-          (p: any) => p && p.type === "text" && typeof p.text === "string"
-        )
+      : reply?.data?.parts || [];
+    const textParts: TextPart[] = Array.isArray(sourceParts)
+      ? (sourceParts as unknown[]).filter(isTextPart)
       : [];
-    const replyTexts = textParts.map((p: any) => p.text);
+    const replyTexts = textParts.map(p => p.text);
     return { ok: true, status, replyTexts, raw: reply };
   } catch (e) {
     return {
       ok: false,
       status: 500,
       replyTexts: [],
-      error: (e as Error).message,
+      error: errMsg(e),
     };
   }
 }
@@ -94,6 +96,9 @@ export interface SessionBasic {
   title?: string;
 }
 
+// Raw session shape is variable; defensive optional fields
+interface RawSession { id?: string; session_id?: string; title?: string; data?: any; }
+
 // List sessions via raw + fallback parsing
 export async function listSessions(
   remoteHost: string
@@ -102,15 +107,17 @@ export async function listSessions(
   try {
     const res = await fetch(`${remoteHost}/session`);
     const json = await res.json().catch(() => null);
-    const arr = Array.isArray(json) ? json : json?.sessions || json?.data;
+    const arr: unknown = Array.isArray(json) ? json : (json as any)?.sessions || (json as any)?.data;
     if (Array.isArray(arr)) {
-      arr.forEach((r: any) => {
-        if (r && typeof r.id === "string")
-          out.push({ id: r.id, title: r.title });
+      (arr as unknown[]).forEach((r: unknown) => {
+        if (!r || typeof r !== 'object') return;
+        const raw = r as RawSession;
+        const id = typeof raw.id === 'string' ? raw.id : typeof raw.session_id === 'string' ? raw.session_id : undefined;
+        if (id) out.push({ id, title: typeof raw.title === 'string' ? raw.title : undefined });
       });
     }
   } catch (e) {
-    console.error("listSessions error", (e as Error).message);
+    console.error("listSessions error", errMsg(e));
   }
   return out;
 }
@@ -182,7 +189,7 @@ export async function ensureSummarizer(
     } catch (e) {
       console.error(
         "ensureSummarizer save existing failed",
-        (e as Error).message
+        errMsg(e)
       );
     }
     return { session: byTitle, created: false, configUsed, configUpdated };
@@ -202,7 +209,7 @@ export async function ensureSummarizer(
       console.error("ensureSummarizer create failed status", res.status);
     }
   } catch (e) {
-    console.error("ensureSummarizer create error", (e as Error).message);
+    console.error("ensureSummarizer create error", errMsg(e));
   }
   if (createdSession) {
     try {
@@ -220,7 +227,7 @@ export async function ensureSummarizer(
         createdSession.id
       );
     } catch (e) {
-      console.error("ensureSummarizer save new failed", (e as Error).message);
+      console.error("ensureSummarizer save new failed", errMsg(e));
     }
   }
   return {
@@ -237,17 +244,19 @@ export const summarizationPrompt =
 // Summarize recent messages using dedicated summarizer session.
 // recentMessages: array of last messages with role + text
 // Returns summary line plus parsed action flag.
-export async function summarizeMessages(
-  remoteHost: string,
-  recentMessages: { role: string; text: string }[],
-  targetSessionId?: string
-): Promise<{
+export interface SummarizeResult {
   summary: string;
   action: boolean;
   raw: string;
   ok: boolean;
   error?: string;
-}> {
+}
+
+export async function summarizeMessages(
+  remoteHost: string,
+  recentMessages: { role: string; text: string }[],
+  targetSessionId?: string
+): Promise<SummarizeResult> {
   if (!Array.isArray(recentMessages) || recentMessages.length === 0) {
     return {
       summary: "(no messages)",
@@ -302,7 +311,7 @@ export async function summarizeMessages(
       action: false,
       raw: "",
       ok: false,
-      error: (e as Error).message,
+      error: errMsg(e),
     };
   }
 }
@@ -323,7 +332,7 @@ export async function createSession(
     const id = json?.id || json?.session_id || json?.data?.id;
     return typeof id === "string" ? id : null;
   } catch (e) {
-    console.error("createSession error", (e as Error).message);
+    console.error("createSession error", errMsg(e));
     return null;
   }
 }

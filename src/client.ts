@@ -174,11 +174,6 @@ liftHtml("speech-button", {
       speak(summary);
     }
 
-    function updateUIAndAuto() {
-      const s = extractSummary();
-      if (s) readBtn!.title = s;
-      considerAutoSpeak(s);
-    }
 
     function triggerAutoSpeak() {
       const s = extractSummary();

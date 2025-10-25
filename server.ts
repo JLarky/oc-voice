@@ -77,7 +77,7 @@ const SUMMARY_NEGATIVE_TTL_MS = 60 * 1000; // 1m for failed summaries
 let lastSummaryPrune = Date.now();
 // Track in-flight asynchronous summarization per session key to avoid duplicate calls
 const SUMMARY_DEBOUNCE_MS = 2000; // delay before starting summarization to batch bursts
-const summaryDebounceTimers: Record<string, number> = {};
+const summaryDebounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 const inFlightSummary: Record<string, boolean> = {};
 
 const firstMessageSeen = new Set<string>();
@@ -164,7 +164,7 @@ async function fetchSessionsFresh(ip: string) {
 
 // SSE of sessions for an IP
 function sessionsSSE(ip: string): Response {
-  let interval: number | undefined;
+  let interval: ReturnType<typeof setInterval> | undefined;
   const stream = new ReadableStream({
     async start(controller) {
       async function push() {
@@ -243,7 +243,7 @@ async function fetchMessages(ip: string, sessionId: string) {
 
 // SSE for messages
 function messagesSSE(ip: string, sessionId: string): Response {
-  let interval: number | undefined;
+  let interval: ReturnType<typeof setInterval> | undefined;
   const stream = new ReadableStream({
     async start(controller) {
       async function push() {
@@ -360,7 +360,7 @@ function messagesSSE(ip: string, sessionId: string): Response {
                     delete inFlightSummary[cacheKey];
                   }
                 })();
-              }, SUMMARY_DEBOUNCE_MS) as unknown as number;
+              }, SUMMARY_DEBOUNCE_MS);
             }
           }
           const cacheAfter = summaryCacheBySession[cacheKey];
@@ -417,7 +417,7 @@ function messagesSSE(ip: string, sessionId: string): Response {
 
 // SSE of IP addresses
 function ipsSSE(): Response {
-  let interval: number | undefined;
+  let interval: ReturnType<typeof setInterval> | undefined;
   const stream = new ReadableStream({
     async start(controller) {
       function build() {
@@ -472,7 +472,7 @@ function ipsSSE(): Response {
 
 const server = Bun.serve({
   port,
-  async fetch(req) {
+  async fetch(req: Request) {
     const url = new URL(req.url);
 
     // Add IP address
