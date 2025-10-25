@@ -158,11 +158,9 @@ const server = Bun.serve({
       const parts = url.pathname.split("/").filter(Boolean); // ["session", id, maybe 'message']
       if (parts.length === 2 && req.method === "GET") {
         const sid = parts[1];
-        // Confirm session exists via SDK list
-        const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
-        const list = await client.session.list();
-        const exists = Array.isArray(list) && list.some(s => s.id === sid);
-        if (!exists) return Response.redirect("/", 302);
+        // Serve page without pre-check; existence validated on message send
+        // (list() may be eventually consistent and miss recent sessions)
+        // Removed redirect to allow direct navigation by ID
         const page = `<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"/><title>Session ${sid}</title><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .small{font-size:.75rem;color:#666;} a{color:#0366d6;text-decoration:none;} a:hover{text-decoration:underline;} </style></head><body><h1>Session ${sid}</h1><div><a href=\"/\">&larr; Back to sessions</a></div><form id=\"session-message-form\"><div class=\"row\"><input id=\"session-message-input\" type=\"text\" placeholder=\"Enter message\" /><button type=\"submit\">Send</button></div><div id=\"session-message-result\" class=\"small\"></div></form><script>window.__SESSION_ID__='${sid}';</script><script type=\"module\" src=\"/client.js\"></script></body></html>`;
         return new Response(page, { headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
