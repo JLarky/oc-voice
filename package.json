@@ -9,6 +9,7 @@
     "watch": "bun build src/client.ts --outdir public --watch"
   },
   "dependencies": {
+    "@lift-html/core": "^0.0.4",
     "@opencode-ai/sdk": "^0.15.16"
   }
 }

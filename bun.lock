@@ -4,14 +4,14 @@
     "": {
       "name": "ask-script",
       "dependencies": {
+        "@lift-html/core": "^0.0.4",
         "@opencode-ai/sdk": "^0.15.16",
-        "valibot": "^0.30.0",
       },
     },
   },
   "packages": {
-    "@opencode-ai/sdk": ["@opencode-ai/sdk@0.15.16", "", {}, "sha512-NPXnJhsUisq9W+hfCyWWTc8DWiQZpbfHo6Ei6hxYUR8uS1y67BzVzEieXezlnwN4US9+1pk4HWwjfXw2RnN4Ng=="],
+    "@lift-html/core": ["@lift-html/core@0.0.4", "", {}, "sha512-QFfCu2PwGhN+dQ697TPuxvaeLo8swhHA0Bivypg3Owk5VcPkP6WHdzrrDVCQXstr1ANP8NFmFjX1WBM2y7ZCHA=="],
 
-    "valibot": ["valibot@0.30.0", "", {}, "sha512-5POBdbSkM+3nvJ6ZlyQHsggisfRtyT4tVTo1EIIShs6qCdXJnyWU5TJ68vr8iTg5zpOLjXLRiBqNx+9zwZz/rA=="],
+    "@opencode-ai/sdk": ["@opencode-ai/sdk@0.15.16", "", {}, "sha512-NPXnJhsUisq9W+hfCyWWTc8DWiQZpbfHo6Ei6hxYUR8uS1y67BzVzEieXezlnwN4US9+1pk4HWwjfXw2RnN4Ng=="],
   }
 }
