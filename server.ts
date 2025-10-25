@@ -84,8 +84,13 @@ const firstMessageSeen = new Set<string>();
 const inFlightFirstMessage: Record<string, boolean> = {};
 
 // Escape HTML
-import { escapeHtml, sendDatastarPatchElements, renderSessionDetailPage, renderSessionsListPage } from './rendering';
-import { renderSessionsUl, renderIpsUl, renderMessageItems } from './rendering';
+import {
+  escapeHtml,
+  sendDatastarPatchElements,
+  renderSessionDetailPage,
+  renderSessionsListPage,
+} from "./rendering";
+import { renderSessionsUl, renderIpsUl, renderMessageItems } from "./rendering";
 
 // Fetch sessions fresh for an IP (no cache usage, but populates cache for quick create-session reflection)
 async function fetchSessionsFresh(ip: string) {
@@ -94,16 +99,25 @@ async function fetchSessionsFresh(ip: string) {
   try {
     const client = createOpencodeClient({ baseUrl: base });
     const remote = await client.session.list().catch((e: any) => {
-      console.warn("SDK session.list error", { ip, msg: (e && e.message) || String(e) });
+      console.warn("SDK session.list error", {
+        ip,
+        msg: (e && e.message) || String(e),
+      });
       return null;
     });
-    console.log("SDK session.list raw", { ip, type: remote && typeof remote, keys: remote && Object.keys(remote as any), value: remote });
+    console.log("SDK session.list raw", {
+      ip,
+      type: remote && typeof remote,
+      keys: remote && Object.keys(remote as any),
+      value: remote,
+    });
     let list: { id: string; title?: string }[] = [];
     if (Array.isArray(remote)) {
       list = remote.map((r) => ({ id: r.id, title: r.title }));
     } else if (remote && typeof remote === "object") {
       const arr = (remote as any).data || (remote as any).sessions;
-      if (Array.isArray(arr)) list = arr.map((r: any) => ({ id: r.id, title: r.title }));
+      if (Array.isArray(arr))
+        list = arr.map((r: any) => ({ id: r.id, title: r.title }));
     }
     if (!list.length) {
       try {
@@ -111,15 +125,24 @@ async function fetchSessionsFresh(ip: string) {
         console.log("raw /session status", { ip, status: rawRes.status });
         if (rawRes.ok) {
           const rawJson = await rawRes.json().catch((e: any) => {
-            console.warn("raw /session json parse error", { ip, msg: (e && e.message) || String(e) });
+            console.warn("raw /session json parse error", {
+              ip,
+              msg: (e && e.message) || String(e),
+            });
             return null;
           });
           console.log("raw /session json", { ip, value: rawJson });
-          const rawArr = Array.isArray(rawJson) ? rawJson : rawJson?.sessions || rawJson?.data;
-          if (Array.isArray(rawArr)) list = rawArr.map((r: any) => ({ id: r.id, title: r.title }));
+          const rawArr = Array.isArray(rawJson)
+            ? rawJson
+            : rawJson?.sessions || rawJson?.data;
+          if (Array.isArray(rawArr))
+            list = rawArr.map((r: any) => ({ id: r.id, title: r.title }));
         }
       } catch (e) {
-        console.warn("raw /session fetch error", { ip, msg: (e as Error).message });
+        console.warn("raw /session fetch error", {
+          ip,
+          msg: (e as Error).message,
+        });
       }
     }
     const now = Date.now();
@@ -150,10 +173,10 @@ function sessionsSSE(ip: string): Response {
           const statusHtml = `<div id="sessions-status" class="status">Updated ${new Date().toLocaleTimeString()}</div>`;
           try {
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(statusHtml))
+              new TextEncoder().encode(sendDatastarPatchElements(statusHtml)),
             );
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(html))
+              new TextEncoder().encode(sendDatastarPatchElements(html)),
             );
           } catch (e) {
             if (interval) clearInterval(interval);
@@ -195,7 +218,7 @@ async function fetchMessages(ip: string, sessionId: string) {
       "Failed to fetch messages",
       ip,
       sessionId,
-      (e as Error).message
+      (e as Error).message,
     );
     return [];
   }
@@ -245,7 +268,7 @@ function messagesSSE(ip: string, sessionId: string): Response {
           }));
           const { hash: recentHash, reuse } = shouldReuseSummary(
             cached?.messageHash,
-            recentForHash
+            recentForHash,
           );
           if (reuse && cached) {
             summaryText = cached.summary;
@@ -278,7 +301,7 @@ function messagesSSE(ip: string, sessionId: string): Response {
                     const summ = await summarizeMessages(
                       remoteBase,
                       recentForHash,
-                      sessionId
+                      sessionId,
                     );
                     if (summ.ok) {
                       summaryCacheBySession[cacheKey] = {
@@ -306,7 +329,7 @@ function messagesSSE(ip: string, sessionId: string): Response {
                   } catch (e) {
                     console.error(
                       "Summarizer summary error",
-                      (e as Error).message
+                      (e as Error).message,
                     );
                   } finally {
                     delete inFlightSummary[cacheKey];
@@ -326,21 +349,21 @@ function messagesSSE(ip: string, sessionId: string): Response {
             totalCount === 0
               ? `<div id=\"messages-list\">${messageItems}</div>`
               : `<div id=\"messages-list\">${messageItems}<div class=\"messages-summary\" style=\"opacity:.55;margin-top:4px\">summary: ${escapeHtml(
-                  summaryText
+                  summaryText,
                 )} ${badge}</div></div>`;
           const statusHtml = `<div id="messages-status" class="status">Updated ${new Date().toLocaleTimeString()}</div>`;
           try {
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(statusHtml))
+              new TextEncoder().encode(sendDatastarPatchElements(statusHtml)),
             );
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(html))
+              new TextEncoder().encode(sendDatastarPatchElements(html)),
             );
             controller.enqueue(
               new TextEncoder().encode(
                 "event: datastar-script\n" +
-                  "data: script (function(){var el=document.getElementById('messages-list');if(!el) return;if(!el.__observerAdded){var obs=new MutationObserver(function(muts){var last=el.querySelector('.message:last-child');if(last&&last.scrollIntoView){last.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;});obs.observe(el,{childList:true,subtree:true});el.__observerAdded=true;}var lastMsg=el.querySelector('.message:last-child');if(lastMsg&&lastMsg.scrollIntoView){lastMsg.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;})();\n\n"
-              )
+                  "data: script (function(){var el=document.getElementById('messages-list');if(!el) return;if(!el.__observerAdded){var obs=new MutationObserver(function(muts){var last=el.querySelector('.message:last-child');if(last&&last.scrollIntoView){last.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;});obs.observe(el,{childList:true,subtree:true});el.__observerAdded=true;}var lastMsg=el.querySelector('.message:last-child');if(lastMsg&&lastMsg.scrollIntoView){lastMsg.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;})();\n\n",
+              ),
             );
           } catch (e) {
             if (interval) clearInterval(interval);
@@ -378,10 +401,10 @@ function ipsSSE(): Response {
           const statusHtml = `<div id="ips-status" class="status">Updated ${new Date().toLocaleTimeString()}</div>`;
           try {
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(statusHtml))
+              new TextEncoder().encode(sendDatastarPatchElements(statusHtml)),
             );
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(html))
+              new TextEncoder().encode(sendDatastarPatchElements(html)),
             );
           } catch (e) {
             if (interval) clearInterval(interval);
@@ -494,8 +517,8 @@ const server = Bun.serve({
           ok
             ? "Removed IP: " + escapeHtml(ip)
             : ip
-            ? "IP not found"
-            : "No IP provided"
+              ? "IP not found"
+              : "No IP provided"
         }</div>`;
         const listHtml = renderIpsUl(ipStore);
         const stream =
@@ -585,7 +608,7 @@ const server = Bun.serve({
           } catch (e) {
             console.warn(
               "SDK create failed, trying raw endpoint:",
-              (e as Error).message
+              (e as Error).message,
             );
             const rawRes = await fetch(`${base}/session`, {
               method: "POST",
@@ -602,7 +625,7 @@ const server = Bun.serve({
           }
           if (!sessionId || typeof sessionId !== "string")
             throw new Error(
-              `Session creation returned invalid ID: ${JSON.stringify(created)}`
+              `Session creation returned invalid ID: ${JSON.stringify(created)}`,
             );
           // Inject into per-IP cache
           const entry = {
@@ -620,11 +643,11 @@ const server = Bun.serve({
           }
 
           const html = `<div id="create-session-result" class="result" data-init="location.href='/sessions/${escapeHtml(
-            ip
+            ip,
           )}/${escapeHtml(
-            entry.id
+            entry.id,
           )}'">Created session: <a href="/sessions/${escapeHtml(
-            ip
+            ip,
           )}/${escapeHtml(entry.id)}">${escapeHtml(entry.id)}</a></div>`;
           return new Response(sendDatastarPatchElements(html), {
             headers: { "Content-Type": "text/event-stream; charset=utf-8" },
@@ -761,7 +784,7 @@ const server = Bun.serve({
               console.error(
                 "Bulk delete session error",
                 sid,
-                (e as Error).message
+                (e as Error).message,
               );
             }
             if (deletedOk) deletedCount++;
@@ -848,11 +871,11 @@ const server = Bun.serve({
           if (!text)
             return new Response(
               sendDatastarPatchElements(
-                '<div id="session-message-result" class="result">No text</div>'
+                '<div id="session-message-result" class="result">No text</div>',
               ),
               {
                 headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-              }
+              },
             );
           // First message injection logic
           const sessionKey = sid;
@@ -868,7 +891,7 @@ const server = Bun.serve({
               try {
                 const existing = await listMessages(
                   resolveBaseUrl(ip),
-                  sid
+                  sid,
                 ).catch(() => []);
                 existingCount = existing.length;
               } catch {}
@@ -895,7 +918,7 @@ const server = Bun.serve({
           }
           const joined = result.replyTexts.join("\n") || "(no reply)";
           const escaped = escapeHtml(
-            joined.substring(0, 50) + (joined.length > 50 ? "..." : "")
+            joined.substring(0, 50) + (joined.length > 50 ? "..." : ""),
           );
           const html = `<div id="session-message-result" class="result">Reply: ${escaped}</div>`;
           return new Response(sendDatastarPatchElements(html), {
@@ -960,7 +983,7 @@ const server = Bun.serve({
           if (!exists)
             return Response.redirect(
               `/sessions/${encodeURIComponent(ip)}`,
-              302
+              302,
             );
         } catch {
           /* ignore */
@@ -1004,7 +1027,11 @@ const server = Bun.serve({
             } catch {}
           }
         } catch {}
-        const page = renderSessionDetailPage({ ip, sessionId: sid, sessionTitle });
+        const page = renderSessionDetailPage({
+          ip,
+          sessionId: sid,
+          sessionTitle,
+        });
         return new Response(page, {
           headers: { "Content-Type": "text/html; charset=utf-8" },
         });

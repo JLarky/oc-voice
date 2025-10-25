@@ -16,6 +16,6 @@ export function renderSessionDetailPage({
       ip={ip}
       sessionId={sessionId}
       sessionTitle={sessionTitle}
-    />
+    />,
   );
 }

@@ -89,9 +89,12 @@ liftHtml("speech-button", {
       // Markup already contains buttons; wire them up.
       const buttons = Array.from(root.querySelectorAll("button"));
       // Prefer matching by text, fallback to order.
-      readBtn = buttons.find(b => /read summary/i.test(b.textContent || "")) || readBtn;
-      playPause = buttons.find(b => /(play|pause)/i.test(b.textContent || "")) || null;
-      testBtn = buttons.find(b => /test/i.test(b.textContent || "")) || null;
+      readBtn =
+        buttons.find((b) => /read summary/i.test(b.textContent || "")) ||
+        readBtn;
+      playPause =
+        buttons.find((b) => /(play|pause)/i.test(b.textContent || "")) || null;
+      testBtn = buttons.find((b) => /test/i.test(b.textContent || "")) || null;
       // Ensure playPause text reflects stored autoplay state.
       if (playPause) playPause.textContent = isPlaying ? "Pause" : "Play";
     }
@@ -101,7 +104,9 @@ liftHtml("speech-button", {
       playPause.addEventListener("click", () => {
         isPlaying = !isPlaying;
         playPause!.textContent = isPlaying ? "Pause" : "Play";
-        try { localStorage.setItem(LS_KEY, String(isPlaying)); } catch {}
+        try {
+          localStorage.setItem(LS_KEY, String(isPlaying));
+        } catch {}
         console.log("playPause toggle", { isPlaying });
         if (isPlaying) triggerAutoSpeak();
       });
@@ -119,14 +124,19 @@ liftHtml("speech-button", {
         } catch {}
         // Fallback: short Web Audio beep
         try {
-          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const ctx = new (
+            window.AudioContext || (window as any).webkitAudioContext
+          )();
           const osc = ctx.createOscillator();
           osc.type = "sine";
           osc.frequency.value = 660;
           osc.connect(ctx.destination);
           osc.start();
           setTimeout(() => {
-            try { osc.stop(); ctx.close(); } catch {}
+            try {
+              osc.stop();
+              ctx.close();
+            } catch {}
           }, 250);
         } catch {}
       });
@@ -169,7 +179,7 @@ liftHtml("speech-button", {
         !s ||
         s === "..." ||
         /^(\(no recent messages\)|\(no messages\)|\(empty summary\)|\(summary failed\))$/i.test(
-          s
+          s,
         )
       );
     }
@@ -244,7 +254,7 @@ liftHtml("submit-on-enter", {
           this.closest("form")?.requestSubmit();
         }
       },
-      abort
+      abort,
     );
   },
 });
