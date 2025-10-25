@@ -189,11 +189,9 @@ export async function summarizeMessages(remoteHost: string, recentMessages: { ro
     const summResult = await ensureSummarizer(remoteHost, { title: 'summarizer' });
     const summSession = summResult.session?.id;
     if (!summSession) return { summary: '', action: false, raw: '', ok: false, error: 'No summarizer session' };
-    const send1 = await sendMessage(remoteHost, summSession, combined);
-    if (!send1.ok) return { summary: '', action: false, raw: '', ok: false, error: send1.error || 'Combined send failed' };
-    const send2 = await sendMessage(remoteHost, summSession, prompt);
-    if (!send2.ok) return { summary: '', action: false, raw: '', ok: false, error: send2.error || 'Prompt send failed' };
-    const raw = send2.replyTexts.join('\n').trim();
+    const sendCombined = await sendMessage(remoteHost, summSession, combined + '\n\n' + prompt);
+    if (!sendCombined.ok) return { summary: '', action: false, raw: '', ok: false, error: sendCombined.error || 'Summarize send failed' };
+    const raw = sendCombined.replyTexts.join('\n').trim();
     const action = /\|\s*action\s*=\s*yes/i.test(raw);
     return { summary: raw, action, raw, ok: true };
   } catch (e) {
