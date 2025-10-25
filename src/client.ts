@@ -117,7 +117,7 @@ liftHtml("speech-button", {
         try {
           if ("speechSynthesis" in window) {
             speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance("Audio test");
+            const u = new SpeechSynthesisUtterance("hi");
             speechSynthesis.speak(u);
             return;
           }
