@@ -62,14 +62,26 @@ interface CachedSessions {
   fetchedAt: number;
 }
 const cachedSessionsByIp: Record<string, CachedSessions | null> = {};
+// Per-session summary cache to avoid repeated summarizer calls when no new messages
+const summaryCacheBySession: Record<string, { messageCount: number; summary: string }> = {};
 
 // Escape HTML
+const ESCAPE_RE = /[&<>"]/g;
+const ESCAPE_MAP: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 function escapeHtml(text: string): string {
-  if (!text || typeof text !== "string") return String(text || "");
-  return text.replace(
-    /[&<>"]/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!)
-  );
+  if (typeof text !== 'string' || text === '') return String(text || '');
+  ESCAPE_RE.lastIndex = 0;
+  if (!ESCAPE_RE.test(text)) return text;
+  ESCAPE_RE.lastIndex = 0;
+  let out = '';
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = ESCAPE_RE.exec(text))) {
+    const i = match.index;
+    out += text.slice(lastIndex, i) + ESCAPE_MAP[text[i]];
+    lastIndex = i + 1;
+  }
+  return out + text.slice(lastIndex);
 }
 
 // Datastar patch helper
@@ -224,7 +236,42 @@ function messagesSSE(ip: string, sessionId: string): Response {
                 })
                 .join("")
             : '<div class="empty">(no messages)</div>';
-          const html = `<div id=\"messages-list\">${messageItems}</div>`;
+          // Build or reuse summarizer-based summary using dedicated summarizer session
+          let summaryText = '(no recent messages)';
+          const totalCount = messages.length;
+          const cacheKey = `${ip}::${sessionId}`;
+          const cached = summaryCacheBySession[cacheKey];
+          if (cached && cached.messageCount === totalCount) {
+            summaryText = cached.summary;
+          } else {
+            // Collect last up to 3 messages (user + assistant) for summarizer context
+            const recent = messages.slice(-3);
+            const combined = recent.map((m: any) => `${m.role}: ${(m.parts?.[0]?.text || m.text || '').replace(/\s+/g,' ').trim()}`).join('\n');
+            // Ensure summarizer session for remote IP host (port 2000)
+            const remoteBase = resolveBaseUrl(ip);
+            try {
+              // Reuse summarizer session via ensureSummarizer (imported below inline to avoid cycle)
+              const { ensureSummarizer, sendMessage: rawSendMessage } = await import('./src/oc-client');
+              const summResult = await ensureSummarizer(remoteBase, { title: 'summarizer' });
+              const summSession = summResult.session?.id;
+              if (summSession) {
+                const prompt = 'Summarize the following conversation messages focusing on latest user intent in <=18 words. Indicate if user requests guidance with |action=yes or |action=no at end. Output ONLY that line.';
+                // Send combined messages then prompt
+                const contentRes = await rawSendMessage(remoteBase, summSession, combined);
+                if (contentRes.ok) {
+                  const summaryRes = await rawSendMessage(remoteBase, summSession, prompt);
+                  if (summaryRes.ok) {
+                    const raw = summaryRes.replyTexts.join('\n').trim();
+                    summaryText = raw || summaryText;
+                    summaryCacheBySession[cacheKey] = { messageCount: totalCount, summary: summaryText };
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('Summarizer summary error', (e as Error).message);
+            }
+          }
+          const html = `<div id=\"messages-list\">${messageItems}<div class=\"messages-summary\" style=\"opacity:.55;margin-top:4px\">summary: ${escapeHtml(summaryText)}</div></div>`;
           const statusHtml = `<div id="messages-status" class="status">Updated ${new Date().toLocaleTimeString()}</div>`;
           try {
             controller.enqueue(

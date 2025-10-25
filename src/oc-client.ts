@@ -76,3 +76,123 @@ export async function sendMessage(
     return { ok: false, status: 500, replyTexts: [], error: (e as Error).message };
   }
 }
+
+// --- Session utilities ---
+export interface SessionBasic {
+  id: string;
+  title?: string;
+}
+
+// List sessions via raw + fallback parsing
+export async function listSessions(remoteHost: string): Promise<SessionBasic[]> {
+  const out: SessionBasic[] = [];
+  try {
+    const res = await fetch(`${remoteHost}/session`);
+    const json = await res.json().catch(() => null);
+    const arr = Array.isArray(json) ? json : json?.sessions || json?.data;
+    if (Array.isArray(arr)) {
+      arr.forEach((r: any) => {
+        if (r && typeof r.id === 'string') out.push({ id: r.id, title: r.title });
+      });
+    }
+  } catch (e) {
+    console.error('listSessions error', (e as Error).message);
+  }
+  return out;
+}
+
+export interface EnsureSummarizerOptions {
+  configPath?: string; // default playpen/summarizer-config.json
+  title?: string; // default summarizer
+}
+
+export interface EnsureSummarizerResult {
+  session: SessionBasic | null;
+  created: boolean;
+  configUsed: boolean;
+  configUpdated: boolean;
+}
+
+export async function ensureSummarizer(remoteHost: string, opts: EnsureSummarizerOptions = {}): Promise<EnsureSummarizerResult> {
+  const title = (opts.title || 'summarizer').toLowerCase();
+  const configPath = opts.configPath || 'playpen/summarizer-config.json';
+  let configUsed = false;
+  let configUpdated = false;
+  let storedId: string | undefined;
+  let storedBase: string | undefined;
+  try {
+    const text = await Bun.file(configPath).text();
+    const data = JSON.parse(text);
+    if (data && typeof data === 'object') {
+      storedId = typeof data.summarizerSessionId === 'string' ? data.summarizerSessionId : undefined;
+      storedBase = typeof data.lastBaseUrl === 'string' ? data.lastBaseUrl : undefined;
+    }
+  } catch {
+    /* no existing config */
+  }
+  const sessions = await listSessions(remoteHost);
+  if (storedBase === remoteHost && storedId) {
+    const match = sessions.find(s => s.id === storedId);
+    if (match) {
+      configUsed = true;
+      console.log('ensureSummarizer reused (config) summarizer session id', match.id);
+      return { session: match, created: false, configUsed, configUpdated, };
+    }
+  }
+  const byTitle = sessions.find(s => (s.title || '').toLowerCase() === title);
+  if (byTitle) {
+    try {
+      await Bun.write(configPath, JSON.stringify({ lastBaseUrl: remoteHost, summarizerSessionId: byTitle.id }, null, 2));
+      configUpdated = true;
+      console.log('ensureSummarizer reused (title) summarizer session id', byTitle.id);
+    } catch (e) {
+      console.error('ensureSummarizer save existing failed', (e as Error).message);
+    }
+    return { session: byTitle, created: false, configUsed, configUpdated };
+  }
+  let createdSession: SessionBasic | null = null;
+  try {
+    const res = await fetch(`${remoteHost}/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title })
+    });
+    if (res.ok) {
+      const json = await res.json().catch(() => null);
+      const id = json?.id || json?.session_id || json?.data?.id;
+      if (typeof id === 'string') createdSession = { id, title };
+    } else {
+      console.error('ensureSummarizer create failed status', res.status);
+    }
+  } catch (e) {
+    console.error('ensureSummarizer create error', (e as Error).message);
+  }
+  if (createdSession) {
+    try {
+      await Bun.write(configPath, JSON.stringify({ lastBaseUrl: remoteHost, summarizerSessionId: createdSession.id }, null, 2));
+      configUpdated = true;
+      console.log('ensureSummarizer created new summarizer session id', createdSession.id);
+    } catch (e) {
+      console.error('ensureSummarizer save new failed', (e as Error).message);
+    }
+  }
+  return { session: createdSession, created: !!createdSession, configUsed, configUpdated };
+}
+
+// Create a new session with given title; returns id or null.
+export async function createSession(remoteHost: string, title: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${remoteHost}/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title })
+    });
+    if (!res.ok) return null;
+    const json = await res.json().catch(() => null);
+    const id = json?.id || json?.session_id || json?.data?.id;
+    return typeof id === 'string' ? id : null;
+  } catch (e) {
+    console.error('createSession error', (e as Error).message);
+    return null;
+  }
+}
