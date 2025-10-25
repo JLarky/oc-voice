@@ -6,6 +6,8 @@
       "dependencies": {
         "@lift-html/core": "^0.0.4",
         "@opencode-ai/sdk": "^0.15.16",
+        "preact": "^10.27.2",
+        "preact-render-to-string": "^6.6.3",
       },
     },
   },
@@ -13,5 +15,9 @@
     "@lift-html/core": ["@lift-html/core@0.0.4", "", {}, "sha512-QFfCu2PwGhN+dQ697TPuxvaeLo8swhHA0Bivypg3Owk5VcPkP6WHdzrrDVCQXstr1ANP8NFmFjX1WBM2y7ZCHA=="],
 
     "@opencode-ai/sdk": ["@opencode-ai/sdk@0.15.16", "", {}, "sha512-NPXnJhsUisq9W+hfCyWWTc8DWiQZpbfHo6Ei6hxYUR8uS1y67BzVzEieXezlnwN4US9+1pk4HWwjfXw2RnN4Ng=="],
+
+    "preact": ["preact@10.27.2", "", {}, "sha512-5SYSgFKSyhCbk6SrXyMpqjb5+MQBgfvEKE/OC+PujcY34sOpqtr+0AZQtPYx5IA6VxynQ7rUPCtKzyovpj9Bpg=="],
+
+    "preact-render-to-string": ["preact-render-to-string@6.6.3", "", { "peerDependencies": { "preact": ">=10 || >= 11.0.0-0" } }, "sha512-7oHG7jzjriqsFPkSPiPnzrQ0GcxFm6wOkYWNdStK5Ks9YlWSQQXKGBRAX4nKDdqX7HAQuRvI4pZNZMycK4WwDw=="],
   }
 }

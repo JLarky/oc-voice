@@ -63,30 +63,29 @@ function liftHtml(tagName, opts) {
 liftHtml("messages-wrapper", {
   init(destroy) {
     const root = this;
-    let list = root.querySelector("#messages-list");
-    const ensureList = () => {
-      if (!list)
-        list = root.querySelector("#messages-list");
-    };
     let rafId = null;
     const scroll = () => {
       if (rafId !== null)
         cancelAnimationFrame(rafId);
-      ensureList();
-      if (!list)
+      const list2 = root.querySelector("#messages-list");
+      if (!list2)
         return;
       rafId = requestAnimationFrame(() => {
         rafId = null;
-        list.scrollTop = list.scrollHeight;
+        list2.scrollTop = list2.scrollHeight;
       });
     };
     scroll();
-    const mutObs = new MutationObserver(() => scroll());
-    if (list)
-      mutObs.observe(list, { childList: true, subtree: true });
-    else
-      mutObs.observe(root, { childList: true, subtree: true });
+    const mutObs = new MutationObserver((mutations) => {
+      scroll();
+    });
+    mutObs.observe(root, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
     const resizeObs = new ResizeObserver(() => scroll());
+    const list = root.querySelector("#messages-list");
     if (list)
       resizeObs.observe(list);
     else

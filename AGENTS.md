@@ -58,6 +58,12 @@ Entire repo (server, client, scripts).
 - Lightweight in-memory caches; dedupe by `id`; avoid unbounded growth
 - Summary cache: hash last 3 messages via fnv1a; reuse when hash matches; 15m TTL success; 1m TTL failed '(summary failed)'; prune every ~30s; shouldReuseSummary used for clarity; in-flight guard prevents duplicate summarizer calls
 
+## Templating
+- Server-side HTML pages are rendered with Preact components (SSR only, no hydration) for full pages and reusable structural fragments.
+- Do not introduce other templating engines (Eta, Handlebars, etc.) unless explicitly requested.
+- Client-side dynamic behavior uses lift-html and Datastar; avoid React/Preact client hydration.
+- Rely on Preact's automatic escaping; never use dangerouslySetInnerHTML.
+
 ## HTML & Concurrency
 - Minimal inline styles; escape dynamic text before injecting
 - Avoid global mutation except caches; guard with simple maps/sets
