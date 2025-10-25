@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "ask": "bun run ask.ts",
+
     "build": "bun build src/client.ts --outdir public",
     "dev": "bun run --watch server.ts",
     "watch": "bun build src/client.ts --outdir public --watch"

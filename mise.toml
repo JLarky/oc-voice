@@ -8,4 +8,8 @@ run = "docker run --rm -it -p 3000:3000 -v $PWD:/work -w /work -v ~/.colima-jail
 run = "bunx oxfmt@latest"
 
 [tasks."test:all"]
-run = "bun test && bunx tsgo --project tsconfig.json --noEmit"
+depends = ["tsgo"]
+run = "bun test"
+
+[tasks."tsgo"]
+run = "bunx tsgo --project tsconfig.json --noEmit"
