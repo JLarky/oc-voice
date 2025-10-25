@@ -23,7 +23,7 @@ export function recentMessagesHash(messages: RecentMessage[]): string {
 
 export function shouldReuseSummary(
   cachedHash: string | undefined,
-  messages: RecentMessage[]
+  messages: RecentMessage[],
 ): { hash: string; reuse: boolean } {
   const hash = recentMessagesHash(messages);
   return { hash, reuse: !!cachedHash && cachedHash === hash };
