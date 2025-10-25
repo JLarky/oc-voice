@@ -553,9 +553,9 @@ const server = Bun.serve({
           } else {
             cachedSessionsByIp[ip] = { list: [entry], fetchedAt: now };
           }
-          const html = `<div id="create-session-result" class="result">Created session: <a href="/sessions/${escapeHtml(
+          const html = `<div id="create-session-result" class="result" data-init="location.href='/sessions/${escapeHtml(ip)}/${escapeHtml(entry.id)}'">Created session: <a href="/sessions/${escapeHtml(
             ip
-          )}/${escapeHtml(entry.id)}">${escapeHtml(entry.id)}</a></div><script>location.href='/sessions/${escapeHtml(ip)}/${escapeHtml(entry.id)}';</script>`;
+          )}/${escapeHtml(entry.id)}">${escapeHtml(entry.id)}</a></div>`;
           return new Response(sendDatastarPatchElements(html), {
             headers: { "Content-Type": "text/event-stream; charset=utf-8" },
           });
