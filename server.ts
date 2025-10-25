@@ -3,7 +3,7 @@
 const port = 3000;
 
 import { createOpencodeClient } from "@opencode-ai/sdk";
-import { listMessages } from "./src/oc-client";
+import { listMessages, sendMessage as rawSendMessage } from "./src/oc-client";
 
 // Get the remote host from command line arg or env var (e.g., 192.168.215.4)
 const REMOTE_HOST_IP =
@@ -483,80 +483,17 @@ const server = Bun.serve({
               }
             );
           console.log("Message send start", { sid, text });
-          const client = createOpencodeClient({ baseUrl: OPENCODE_BASE_URL });
-          let reply: any;
-          try {
-            reply = await (client as any).session.prompt?.({
-              params: { id: sid },
-              body: { parts: [{ type: "text", text }] },
+          const result = await rawSendMessage(OPENCODE_BASE_URL, sid, text);
+          if (!result.ok) {
+            const msg = escapeHtml(result.error || `HTTP ${result.status}`);
+            const html = `<div id="session-message-result" class="result">Error: ${msg}</div>`;
+            return new Response(sendDatastarPatchElements(html), {
+              headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+              status: result.status || 500,
             });
-          } catch (sdkErr) {
-            console.warn(
-              "SDK prompt error, trying raw endpoint",
-              (sdkErr as Error).message
-            );
-            const rawRes = await fetch(
-              `${OPENCODE_BASE_URL}/session/${sid}/message`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ parts: [{ type: "text", text }] }),
-              }
-            );
-            if (rawRes.status === 404) {
-              return new Response(
-                sendDatastarPatchElements(
-                  `<div id="session-message-result" class="result">Session not found</div>`
-                ),
-                {
-                  headers: {
-                    "Content-Type": "text/event-stream; charset=utf-8",
-                  },
-                  status: 404,
-                }
-              );
-            }
-            if (!rawRes.ok) {
-              const detail = await rawRes.text().catch(() => "");
-              const msg = escapeHtml(detail || `HTTP ${rawRes.status}`);
-              return new Response(
-                sendDatastarPatchElements(
-                  `<div id="session-message-result" class="result">Error: ${msg}</div>`
-                ),
-                {
-                  headers: {
-                    "Content-Type": "text/event-stream; charset=utf-8",
-                  },
-                  status: rawRes.status,
-                }
-              );
-            }
-            reply = await rawRes.json().catch(() => ({}));
           }
-          if (
-            !reply ||
-            (reply.error && /not\s+found/i.test(String(reply.error)))
-          ) {
-            return new Response(
-              sendDatastarPatchElements(
-                `<div id="session-message-result" class="result">Session not found</div>`
-              ),
-              {
-                headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-                status: 404,
-              }
-            );
-          }
-          const sourceParts = Array.isArray(reply.parts)
-            ? reply.parts
-            : reply.data?.parts || [];
-          const textParts = Array.isArray(sourceParts)
-            ? sourceParts.filter(
-                (p: any) => p && p.type === "text" && typeof p.text === "string"
-              )
-            : [];
-          const replyText = textParts.map((p: any) => p.text).join("\n");
-          const escaped = escapeHtml(replyText || "(no reply)");
+          const joined = result.replyTexts.join("\n") || "(no reply)";
+          const escaped = escapeHtml(joined);
           const html = `<div id="session-message-result" class="result">Reply: ${escaped}</div>`;
           return new Response(sendDatastarPatchElements(html), {
             headers: { "Content-Type": "text/event-stream; charset=utf-8" },
