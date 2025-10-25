@@ -9,6 +9,7 @@
     "watch": "bun build src/client.ts --outdir public --watch"
   },
   "dependencies": {
+    "@opencode-ai/sdk": "^0.15.16",
     "valibot": "^0.30.0"
   }
 }

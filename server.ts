@@ -2,7 +2,9 @@
 
 const port = 3000;
 
-// In-memory cache of sessions (dummy list initially)
+// In-memory cache of sessions (dummy list initially); will sync with opencode server if reachable
+import { createOpencodeClient } from "@opencode-ai/sdk";
+
 interface SessionInfo {
   id: string;
   title?: string;
@@ -14,10 +16,25 @@ let sessions: SessionInfo[] = [
   { id: "dummy-2", title: "Example Session 2", createdAt: Date.now() },
 ];
 
+async function refreshSessionsFromSDK() {
+  try {
+    const client = createOpencodeClient({ baseUrl: "http://127.0.0.1:4096" });
+    const remote = await client.session.list();
+    if (Array.isArray(remote)) {
+      sessions = remote.map(r => ({ id: r.id, title: r.title, createdAt: Date.now() }));
+    }
+  } catch (e) {
+    // ignore errors; keep existing dummy list
+  }
+}
+
 // Helper to produce JSON-friendly list
 function sessionList() {
   return sessions.map(s => ({ id: s.id, title: s.title, ageSeconds: Math.round((Date.now() - s.createdAt) / 1000) }));
 }
+
+// Periodically try syncing sessions
+setInterval(refreshSessionsFromSDK, 5000);
 
 // SSE stream: pushes updated list every 5 seconds
 function sessionsSSE(): Response {
@@ -96,7 +113,7 @@ const server = Bun.serve({
       return sessionsSSE();
     }
 
-    // Create a new real session remotely and add to cache
+    // Create a new real session via SDK and add to cache
     if (url.pathname === "/create-session" && req.method === "POST") {
       try {
         const bodyText = await req.text();
@@ -104,17 +121,11 @@ const server = Bun.serve({
         if (bodyText) {
           try { const parsed = JSON.parse(bodyText); if (typeof parsed.title === "string" && parsed.title.trim()) title = parsed.title.trim(); } catch { /* ignore */ }
         }
-        // Remote real session creation (sample endpoint)
-        const remoteRes = await fetch("http://127.0.0.1:4096/session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title }),
-        });
-        if (!remoteRes.ok) throw new Error(`remote ${remoteRes.status}`);
-        const remoteData = await remoteRes.json();
-        const newId = remoteData.id || `local-${Date.now()}`;
-        sessions.push({ id: newId, title, createdAt: Date.now() });
-        return Response.json({ ok: true, id: newId, title });
+        const client = createOpencodeClient({ baseUrl: "http://127.0.0.1:4096" });
+        const created = await client.session.create({ body: { title } });
+        const newId = created.id || `local-${Date.now()}`;
+        sessions.push({ id: newId, title: created.title || title, createdAt: Date.now() });
+        return Response.json({ ok: true, id: newId, title: created.title || title });
       } catch (e) {
         return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });
       }

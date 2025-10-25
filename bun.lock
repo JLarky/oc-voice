@@ -4,11 +4,14 @@
     "": {
       "name": "ask-script",
       "dependencies": {
+        "@opencode-ai/sdk": "^0.15.16",
         "valibot": "^0.30.0",
       },
     },
   },
   "packages": {
+    "@opencode-ai/sdk": ["@opencode-ai/sdk@0.15.16", "", {}, "sha512-NPXnJhsUisq9W+hfCyWWTc8DWiQZpbfHo6Ei6hxYUR8uS1y67BzVzEieXezlnwN4US9+1pk4HWwjfXw2RnN4Ng=="],
+
     "valibot": ["valibot@0.30.0", "", {}, "sha512-5POBdbSkM+3nvJ6ZlyQHsggisfRtyT4tVTo1EIIShs6qCdXJnyWU5TJ68vr8iTg5zpOLjXLRiBqNx+9zwZz/rA=="],
   }
 }
