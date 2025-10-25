@@ -12,7 +12,7 @@ const server = Bun.serve({
       if (!raw.trim()) {
         return new Response(`<div id=\"hello-output\">(enter a question)</div>`, { headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
-      const REMOTE_HOST = "http://192.168.215.4:2323";
+      const REMOTE_HOST_PORT = 2000; const REMOTE_HOST_IP = process.argv[2] || process.env.REMOTE_HOST_IP || "127.0.0.1"; const REMOTE_HOST = `http://${REMOTE_HOST_IP}:${REMOTE_HOST_PORT}`;
       try {
         // Create session
         const sessionRes = await fetch(`${REMOTE_HOST}/session`, {
@@ -36,7 +36,7 @@ const server = Bun.serve({
         return new Response(`<div id=\"hello-output\"><strong>Answer:</strong> ${escaped}</div>`, { headers: { "Content-Type": "text/html; charset=utf-8" } });
       } catch (err) {
         const msg = (err as Error).message.replace(/[&<>\"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[c]!));
-        return new Response(`<div id=\"hello-output\">Error: ${msg}</div>`, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+        return new Response(`<div id=\"hello-output\">Error contacting ${REMOTE_HOST}: ${msg}</div>`, { headers: { "Content-Type": "text/html; charset=utf-8" } });
       }
     }
 
