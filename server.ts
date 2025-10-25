@@ -815,6 +815,76 @@ const server = Bun.serve({
         });
       }
     }
+    // Clear all sessions for IP: POST /sessions/:ip/clear-sessions
+    if (
+      url.pathname.startsWith("/sessions/") &&
+      url.pathname.endsWith("/clear-sessions") &&
+      req.method === "POST"
+    ) {
+      const parts = url.pathname.split("/").filter(Boolean); // ['sessions','ip','clear-sessions']
+      if (parts.length === 3 && parts[2] === "clear-sessions") {
+        const ip = parts[1];
+        if (!ipStore.includes(ip)) return new Response("Unknown IP", { status: 404 });
+        let deletedCount = 0;
+        let total = 0;
+        const base = resolveBaseUrl(ip);
+        try {
+          // Fetch latest list to ensure we attempt all existing sessions
+          const list = await fetchSessionsFresh(ip);
+          const ids = list.map((s) => s.id).filter((id) => typeof id === 'string' && id.trim());
+          total = ids.length;
+          for (const sid of ids) {
+            let deletedOk = false;
+            try {
+              const client = createOpencodeClient({ baseUrl: base });
+              try {
+                const d = await (client as any).session.delete?.({ params: { id: sid } });
+                if (d && (d.id === sid || (d as any).data?.id === sid || (d as any).ok || (d as any).status === 'ok')) {
+                  deletedOk = true;
+                }
+              } catch (e) {
+                console.warn('SDK delete failed (bulk)', (e as Error).message);
+              }
+              if (!deletedOk) {
+                try {
+                  const rawRes = await fetch(`${base}/session/${sid}`, { method: 'DELETE' });
+                  if (rawRes.ok) deletedOk = true;
+                } catch {}
+              }
+            } catch (e) {
+              console.error('Bulk delete session error', sid, (e as Error).message);
+            }
+            if (deletedOk) deletedCount++;
+          }
+        } catch (e) {
+          console.error('Clear sessions route error', (e as Error).message);
+        }
+        // Reset cache for IP (will be repopulated on next fetch)
+        const cache = cachedSessionsByIp[ip];
+        if (cache) cache.list = [];
+        // Best-effort refresh (in case some deletions failed and we want fresh remaining list)
+        await fetchSessionsFresh(ip).catch(() => null);
+        const afterCache = cachedSessionsByIp[ip];
+        const remainingList = afterCache?.list || [];
+        const sessionItems = remainingList.length
+          ? remainingList
+              .map(
+                (s) =>
+                  `<li><a href="/sessions/${escapeHtml(ip)}/${escapeHtml(s.id)}"><span class="id">${escapeHtml(s.id)}</span></a> - ${escapeHtml(
+                    s.title || '(no title)'
+                  )} <button style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px" data-on:click="@post('/sessions/${escapeHtml(ip)}/${escapeHtml(s.id)}/delete-session')">✕</button></li>`
+              )
+              .join('')
+          : '<li class="empty">(no sessions)</li>';
+        const listHtml = `<ul id="sessions-ul">${sessionItems}</ul>`;
+        const resultHtml = `<div id="delete-session-result" class="result">Cleared sessions: ${deletedCount} / ${total}</div>`;
+        const stream = sendDatastarPatchElements(resultHtml) + sendDatastarPatchElements(listHtml);
+        return new Response(stream, {
+          headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
+          status: 200,
+        });
+      }
+    }
     // Messages SSE: /sessions/:ip/:sid/messages/stream
     if (
       url.pathname.startsWith("/sessions/") &&
@@ -1036,7 +1106,7 @@ const server = Bun.serve({
           ip
         )}</title><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:900px;margin-left:auto;margin-right:auto;} a{color:#0366d6;} input,textarea,button{padding:.5rem;font-size:.95rem;border:1px solid #ccc;border-radius:3px;} button{background:#0366d6;color:white;cursor:pointer;border:none;} button:hover{background:#0256c7;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .status{font-size:.75rem;color:#666;margin-bottom:1rem;} .result{font-size:.75rem;color:#666;margin-top:.5rem;} #sessions-ul{list-style:none;padding:0;} #sessions-ul li{padding:.5rem;border-bottom:1px solid #eee;font-size:.9rem;} #sessions-ul li:last-child{border-bottom:none;} #sessions-ul li span.id{font-family:monospace;color:#333;font-size:.85rem;} .delete-btn{background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px;} .delete-btn:hover{background:#c0392b;} </style></head><body><h1>Sessions for ${escapeHtml(
           ip
-        )}</h1><div><a href="/">&larr; Back home</a></div><h2>Sessions</h2><div id="sessions-status" class="status">Connecting...</div><div id="sessions-list" data-init="@get('/sessions/${escapeHtml(
+        )}</h1><div><a href="/">&larr; Back home</a></div><h2>Sessions</h2><button style="background:#e74c3c;color:#fff;margin-bottom:.5rem;padding:.25rem .5rem;font-size:.7rem;border:none;border-radius:3px;cursor:pointer" data-on:click="@post('/sessions/${escapeHtml(ip)}/clear-sessions')">Clear All</button><div id="sessions-status" class="status">Connecting...</div><div id="sessions-list" data-init="@get('/sessions/${escapeHtml(
           ip
         )}/stream')"><ul id="sessions-ul"><li class="empty">(loading)</li></ul></div><div id="delete-session-result" class="result"></div><h2>Create Session</h2><form id="create-session-form" data-on:submit="@post('/sessions/${escapeHtml(
           ip
