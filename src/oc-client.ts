@@ -179,6 +179,28 @@ export async function ensureSummarizer(remoteHost: string, opts: EnsureSummarize
   return { session: createdSession, created: !!createdSession, configUsed, configUpdated };
 }
 
+// Summarize recent messages using dedicated summarizer session.
+// recentMessages: array of last messages with role + text
+// Returns summary line plus parsed action flag.
+export async function summarizeMessages(remoteHost: string, recentMessages: { role: string; text: string }[]): Promise<{ summary: string; action: boolean; raw: string; ok: boolean; error?: string }> {
+  const combined = recentMessages.map(m => `${m.role}: ${m.text.replace(/\s+/g,' ').trim()}`).join('\n');
+  const prompt = 'Summarize the following conversation focusing on latest user intent in <=18 words. Append |action=yes if user requests guidance/help else |action=no. Output ONLY that line.';
+  try {
+    const summResult = await ensureSummarizer(remoteHost, { title: 'summarizer' });
+    const summSession = summResult.session?.id;
+    if (!summSession) return { summary: '', action: false, raw: '', ok: false, error: 'No summarizer session' };
+    const send1 = await sendMessage(remoteHost, summSession, combined);
+    if (!send1.ok) return { summary: '', action: false, raw: '', ok: false, error: send1.error || 'Combined send failed' };
+    const send2 = await sendMessage(remoteHost, summSession, prompt);
+    if (!send2.ok) return { summary: '', action: false, raw: '', ok: false, error: send2.error || 'Prompt send failed' };
+    const raw = send2.replyTexts.join('\n').trim();
+    const action = /\|\s*action\s*=\s*yes/i.test(raw);
+    return { summary: raw, action, raw, ok: true };
+  } catch (e) {
+    return { summary: '', action: false, raw: '', ok: false, error: (e as Error).message };
+  }
+}
+
 // Create a new session with given title; returns id or null.
 export async function createSession(remoteHost: string, title: string): Promise<string | null> {
   try {

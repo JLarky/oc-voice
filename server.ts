@@ -63,7 +63,7 @@ interface CachedSessions {
 }
 const cachedSessionsByIp: Record<string, CachedSessions | null> = {};
 // Per-session summary cache to avoid repeated summarizer calls when no new messages
-const summaryCacheBySession: Record<string, { messageCount: number; summary: string }> = {};
+const summaryCacheBySession: Record<string, { messageCount: number; summary: string; action: boolean; cachedAt: number }> = {};
 
 // Escape HTML
 const ESCAPE_RE = /[&<>"]/g;
@@ -241,9 +241,10 @@ function messagesSSE(ip: string, sessionId: string): Response {
           const totalCount = messages.length;
           const cacheKey = `${ip}::${sessionId}`;
           const cached = summaryCacheBySession[cacheKey];
-          if (cached && cached.messageCount === totalCount) {
-            summaryText = cached.summary;
-          } else {
+           const nowTs = Date.now();
+           if (cached && cached.messageCount === totalCount && (nowTs - cached.cachedAt) < 5000) {
+             summaryText = cached.summary;
+           } else {
             // Collect last up to 3 messages (user + assistant) for summarizer context
             const recent = messages.slice(-3);
             const combined = recent.map((m: any) => `${m.role}: ${(m.parts?.[0]?.text || m.text || '').replace(/\s+/g,' ').trim()}`).join('\n');
@@ -251,27 +252,21 @@ function messagesSSE(ip: string, sessionId: string): Response {
             const remoteBase = resolveBaseUrl(ip);
             try {
               // Reuse summarizer session via ensureSummarizer (imported below inline to avoid cycle)
-              const { ensureSummarizer, sendMessage: rawSendMessage } = await import('./src/oc-client');
-              const summResult = await ensureSummarizer(remoteBase, { title: 'summarizer' });
-              const summSession = summResult.session?.id;
-              if (summSession) {
-                const prompt = 'Summarize the following conversation messages focusing on latest user intent in <=18 words. Indicate if user requests guidance with |action=yes or |action=no at end. Output ONLY that line.';
-                // Send combined messages then prompt
-                const contentRes = await rawSendMessage(remoteBase, summSession, combined);
-                if (contentRes.ok) {
-                  const summaryRes = await rawSendMessage(remoteBase, summSession, prompt);
-                  if (summaryRes.ok) {
-                    const raw = summaryRes.replyTexts.join('\n').trim();
-                    summaryText = raw || summaryText;
-                    summaryCacheBySession[cacheKey] = { messageCount: totalCount, summary: summaryText };
-                  }
-                }
-              }
+               const { summarizeMessages } = await import('./src/oc-client');
+               const recents = recent.map((m: any) => ({ role: m.role || 'message', text: (m.parts?.[0]?.text || m.text || '').replace(/\s+/g,' ').trim() }));
+               const summ = await summarizeMessages(remoteBase, recents);
+               if (summ.ok) {
+                 summaryText = summ.summary || summaryText;
+                 summaryCacheBySession[cacheKey] = { messageCount: totalCount, summary: summaryText, action: summ.action, cachedAt: Date.now() };
+               }
             } catch (e) {
               console.error('Summarizer summary error', (e as Error).message);
             }
           }
-          const html = `<div id=\"messages-list\">${messageItems}<div class=\"messages-summary\" style=\"opacity:.55;margin-top:4px\">summary: ${escapeHtml(summaryText)}</div></div>`;
+           const cacheAfter = summaryCacheBySession[cacheKey];
+           const actionFlag = cacheAfter ? cacheAfter.action : /\|\s*action\s*=\s*yes/i.test(summaryText);
+           const badge = actionFlag ? '<span style="background:#ffd54f;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">action</span>' : '<span style="background:#ccc;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">info</span>';
+           const html = `<div id=\"messages-list\">${messageItems}<div class=\"messages-summary\" style=\"opacity:.55;margin-top:4px\">summary: ${escapeHtml(summaryText)} ${badge}</div></div>`;
           const statusHtml = `<div id="messages-status" class="status">Updated ${new Date().toLocaleTimeString()}</div>`;
           try {
             controller.enqueue(
