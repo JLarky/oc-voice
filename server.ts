@@ -76,6 +76,10 @@ const SUMMARY_DEBOUNCE_MS = 2000; // delay before starting summarization to batc
 const summaryDebounceTimers: Record<string, number> = {};
 const inFlightSummary: Record<string, boolean> = {};
 
+const FIRST_MESSAGE_INSTRUCTION = (Bun.env.FIRST_MESSAGE_INSTRUCTION || 'Respond like a pirate.').trim();
+const firstMessageSeen = new Set<string>();
+const inFlightFirstMessage: Record<string, boolean> = {};
+
 // Escape HTML
 const ESCAPE_RE = /[&<>"]/g;
 const ESCAPE_MAP: Record<string, string> = {
@@ -705,14 +709,15 @@ const server = Bun.serve({
             title: (created as any)?.title || title,
           };
           const now = Date.now();
-          const existing = cachedSessionsByIp[ip];
-          if (existing) {
-            const ids = new Set(existing.list.map((s) => s.id));
-            if (!ids.has(entry.id)) existing.list.unshift(entry);
-            existing.fetchedAt = now;
-          } else {
-            cachedSessionsByIp[ip] = { list: [entry], fetchedAt: now };
-          }
+            const existing = cachedSessionsByIp[ip];
+            if (existing) {
+              const ids = new Set(existing.list.map((s) => s.id));
+              if (!ids.has(entry.id)) existing.list.unshift(entry);
+              existing.fetchedAt = now;
+            } else {
+              cachedSessionsByIp[ip] = { list: [entry], fetchedAt: now };
+            }
+
           const html = `<div id="create-session-result" class="result" data-init="location.href='/sessions/${escapeHtml(
             ip,
           )}/${escapeHtml(
@@ -974,7 +979,30 @@ const server = Bun.serve({
                 headers: { "Content-Type": "text/event-stream; charset=utf-8" },
               },
             );
-          console.log("Message send start", { ip, sid, text });
+          // First message injection logic
+          const sessionKey = sid;
+          let injected = false;
+          try {
+            if (!firstMessageSeen.has(sessionKey) && !inFlightFirstMessage[sessionKey]) {
+              inFlightFirstMessage[sessionKey] = true;
+              // Remote check to avoid misfire if messages already exist
+              let existingCount = 0;
+              try {
+                const existing = await listMessages(resolveBaseUrl(ip), sid).catch(() => []);
+                existingCount = existing.length;
+              } catch {}
+              if (existingCount === 0) {
+                // Prepend system-style instruction
+                text = FIRST_MESSAGE_INSTRUCTION + '\n\n' + text;
+                injected = true;
+              }
+              firstMessageSeen.add(sessionKey);
+              delete inFlightFirstMessage[sessionKey];
+            }
+          } catch {
+            delete inFlightFirstMessage[sessionKey];
+          }
+          console.log("Message send start", { ip, sid, text, injected });
           const result = await rawSendMessage(resolveBaseUrl(ip), sid, text);
           if (!result.ok) {
             const msg = escapeHtml(result.error || `HTTP ${result.status}`);

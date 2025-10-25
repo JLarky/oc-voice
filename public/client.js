@@ -1,5 +1,6 @@
 // node_modules/@lift-html/core/esm/mod.js
-var HTMLElement_ = typeof HTMLElement !== "undefined" ? HTMLElement : class {};
+var HTMLElement_ = typeof HTMLElement !== "undefined" ? HTMLElement : class {
+};
 
 class LiftBaseClass extends HTMLElement_ {
   static options;
@@ -7,8 +8,9 @@ class LiftBaseClass extends HTMLElement_ {
   static observedAttributes;
 }
 function liftHtml(tagName, opts) {
+
   class LiftElement extends LiftBaseClass {
-    static hmr = new Set();
+    static hmr = new Set;
     acb = undefined;
     static options = opts;
     options = opts;
@@ -63,13 +65,16 @@ liftHtml("messages-wrapper", {
     const root = this;
     let list = root.querySelector("#messages-list");
     const ensureList = () => {
-      if (!list) list = root.querySelector("#messages-list");
+      if (!list)
+        list = root.querySelector("#messages-list");
     };
     let rafId = null;
     const scroll = () => {
-      if (rafId !== null) cancelAnimationFrame(rafId);
+      if (rafId !== null)
+        cancelAnimationFrame(rafId);
       ensureList();
-      if (!list) return;
+      if (!list)
+        return;
       rafId = requestAnimationFrame(() => {
         rafId = null;
         list.scrollTop = list.scrollHeight;
@@ -77,20 +82,25 @@ liftHtml("messages-wrapper", {
     };
     scroll();
     const mutObs = new MutationObserver(() => scroll());
-    if (list) mutObs.observe(list, { childList: true, subtree: true });
-    else mutObs.observe(root, { childList: true, subtree: true });
+    if (list)
+      mutObs.observe(list, { childList: true, subtree: true });
+    else
+      mutObs.observe(root, { childList: true, subtree: true });
     const resizeObs = new ResizeObserver(() => scroll());
-    if (list) resizeObs.observe(list);
-    else resizeObs.observe(root);
+    if (list)
+      resizeObs.observe(list);
+    else
+      resizeObs.observe(root);
     const onWinResize = () => scroll();
     window.addEventListener("resize", onWinResize);
     destroy(() => {
-      if (rafId !== null) cancelAnimationFrame(rafId);
+      if (rafId !== null)
+        cancelAnimationFrame(rafId);
       mutObs.disconnect();
       resizeObs.disconnect();
       window.removeEventListener("resize", onWinResize);
     });
-  },
+  }
 });
 liftHtml("speech-button", {
   init(destroy) {
@@ -101,7 +111,8 @@ liftHtml("speech-button", {
     const LS_KEY = "speechAutoPlay";
     try {
       const stored = localStorage.getItem(LS_KEY);
-      if (stored === "false") isPlaying = false;
+      if (stored === "false")
+        isPlaying = false;
     } catch {}
     let lastSpoken = "";
     let pending = null;
@@ -124,7 +135,8 @@ liftHtml("speech-button", {
           localStorage.setItem(LS_KEY, String(isPlaying));
         } catch {}
         console.log("playPause toggle", { isPlaying });
-        if (isPlaying) triggerAutoSpeak();
+        if (isPlaying)
+          triggerAutoSpeak();
       });
       root.appendChild(playPause);
       const testBtn = document.createElement("button");
@@ -142,7 +154,7 @@ liftHtml("speech-button", {
           }
         } catch {}
         try {
-          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const ctx = new (window.AudioContext || window.webkitAudioContext);
           const osc = ctx.createOscillator();
           osc.type = "sine";
           osc.frequency.value = 660;
@@ -160,17 +172,17 @@ liftHtml("speech-button", {
     }
     function extractSummary() {
       const el = document.querySelector(".messages-summary");
-      if (!el) return "";
+      if (!el)
+        return "";
       let text = (el.textContent || "").replace(/\s+/g, " ").trim();
-      text = text
-        .replace(/^summary:\s*/i, "")
-        .replace(/\b(action|info)\s*$/i, "")
-        .trim();
+      text = text.replace(/^summary:\s*/i, "").replace(/\b(action|info)\s*$/i, "").trim();
       return text;
     }
     function speak(summary) {
-      if (!("speechSynthesis" in window)) return;
-      if (!summary) return;
+      if (!("speechSynthesis" in window))
+        return;
+      if (!summary)
+        return;
       try {
         speechSynthesis.cancel();
       } catch {}
@@ -188,31 +200,32 @@ liftHtml("speech-button", {
       speechSynthesis.speak(currentUtter);
     }
     function isPlaceholder(s) {
-      return (
-        !s ||
-        s === "..." ||
-        /^(\(no recent messages\)|\(no messages\)|\(empty summary\)|\(summary failed\))$/i.test(
-          s,
-        )
-      );
+      return !s || s === "..." || /^(\(no recent messages\)|\(no messages\)|\(empty summary\)|\(summary failed\))$/i.test(s);
     }
     function considerAutoSpeak(summary) {
-      if (!isPlaying) return;
-      if (!summary || isPlaceholder(summary)) return;
+      if (!isPlaying)
+        return;
+      if (!summary || isPlaceholder(summary))
+        return;
       if (currentUtter) {
         if (summary !== lastSpoken && !isPlaceholder(summary))
           pending = summary;
         return;
       }
-      if (summary === lastSpoken) return;
+      if (summary === lastSpoken)
+        return;
       speak(summary);
     }
     function triggerAutoSpeak() {
       const s = extractSummary();
-      if (!s || s === lastSpoken) return;
-      if (isPlaceholder(s)) return;
-      if (!currentUtter) speak(s);
-      else pending = s;
+      if (!s || s === lastSpoken)
+        return;
+      if (isPlaceholder(s))
+        return;
+      if (!currentUtter)
+        speak(s);
+      else
+        pending = s;
     }
     readBtn.addEventListener("click", () => {
       const s = extractSummary() || "No summary yet.";
@@ -229,20 +242,23 @@ liftHtml("speech-button", {
     let initialConsumed = false;
     function updateUIAndAuto() {
       const s = extractSummary();
-      if (s) readBtn.title = s;
+      if (s)
+        readBtn.title = s;
       if (!initialConsumed) {
-        if (s !== initialSummary) initialConsumed = true;
+        if (s !== initialSummary)
+          initialConsumed = true;
         return;
       }
       considerAutoSpeak(s);
     }
     updateUIAndAuto();
     destroy(() => {
-      if (obs) obs.disconnect();
+      if (obs)
+        obs.disconnect();
       clearInterval(intervalId);
       try {
         speechSynthesis.cancel();
       } catch {}
     });
-  },
+  }
 });

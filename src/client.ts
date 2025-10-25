@@ -98,9 +98,8 @@ liftHtml("speech-button", {
         } catch {}
         // Fallback: short Web Audio beep
         try {
-          const ctx = new (
-            window.AudioContext || (window as any).webkitAudioContext
-          )();
+          const ctx = new (window.AudioContext ||
+            (window as any).webkitAudioContext)();
           const osc = ctx.createOscillator();
           osc.type = "sine";
           osc.frequency.value = 660;
@@ -154,7 +153,7 @@ liftHtml("speech-button", {
         !s ||
         s === "..." ||
         /^(\(no recent messages\)|\(no messages\)|\(empty summary\)|\(summary failed\))$/i.test(
-          s,
+          s
         )
       );
     }
