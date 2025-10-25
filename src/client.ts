@@ -24,6 +24,11 @@ liftHtml('speech-button', {
     let readBtn = root.querySelector('button');
     let playPause: HTMLButtonElement | null = null;
     let isPlaying = true;
+    const LS_KEY = 'speechAutoPlay';
+    try {
+      const stored = localStorage.getItem(LS_KEY);
+      if (stored === 'false') isPlaying = false;
+    } catch {}
     let lastSpoken = '';
     let pending: string | null = null;
     let currentUtter: SpeechSynthesisUtterance | null = null;
@@ -36,16 +41,46 @@ liftHtml('speech-button', {
       root.appendChild(readBtn);
       playPause = document.createElement('button');
       playPause.type = 'button';
-      playPause.textContent = 'Pause';
+      playPause.textContent = isPlaying ? 'Pause' : 'Play';
       playPause.style.marginTop = '1rem';
       playPause.style.marginLeft = '0.5rem';
       playPause.addEventListener('click', () => {
         isPlaying = !isPlaying;
         playPause!.textContent = isPlaying ? 'Pause' : 'Play';
+        try { localStorage.setItem(LS_KEY, String(isPlaying)); } catch {}
         console.log('playPause toggle', { isPlaying });
         if (isPlaying) triggerAutoSpeak();
       });
       root.appendChild(playPause);
+      const testBtn = document.createElement('button');
+      testBtn.type = 'button';
+      testBtn.textContent = 'Test';
+      testBtn.style.marginTop = '1rem';
+      testBtn.style.marginLeft = '0.5rem';
+      testBtn.addEventListener('click', () => {
+        // Try speech first
+        try {
+          if ('speechSynthesis' in window) {
+            speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance('Audio test');
+            speechSynthesis.speak(u);
+            return;
+          }
+        } catch {}
+        // Fallback: short Web Audio beep
+        try {
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.value = 660;
+          osc.connect(ctx.destination);
+          osc.start();
+          setTimeout(() => {
+            try { osc.stop(); ctx.close(); } catch {}
+          }, 250);
+        } catch {}
+      });
+      root.appendChild(testBtn);
     }
 
     function extractSummary(): string {

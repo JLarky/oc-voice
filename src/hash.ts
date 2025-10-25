@@ -1,23 +1,30 @@
 // Hash utilities for recent messages
-// FNV-1a 32-bit hash over normalized role:text lines
-// Normalization: role lowercased; text collapsed whitespace & trimmed
-export interface RecentMessage { role: string; text: string; }
+import { createHash } from "crypto";
+import { summarizationPrompt } from "./oc-client";
 
-export function recentMessagesHash(messages: RecentMessage[]): string {
-  let h = 0x811c9dc5;
-  for (const m of messages) {
-    const role = (m.role || 'message').toLowerCase();
-    const text = (m.text || '').replace(/\s+/g,' ').trim();
-    const line = role + ':' + text + '\n';
-    for (let i=0;i<line.length;i++) {
-      h ^= line.charCodeAt(i);
-      h = (h * 0x01000193) >>> 0;
-    }
-  }
-  return h.toString(16);
+// SHA-256 hash over normalized role:text lines
+// Normalization: role lowercased; text collapsed whitespace & trimmed
+export interface RecentMessage {
+  role: string;
+  text: string;
 }
 
-export function shouldReuseSummary(cachedHash: string | undefined, messages: RecentMessage[]): { hash: string; reuse: boolean } {
+export function recentMessagesHash(messages: RecentMessage[]): string {
+  const hash = createHash("sha256");
+  hash.update(summarizationPrompt);
+  for (const m of messages) {
+    const role = (m.role || "message").toLowerCase();
+    const text = (m.text || "").replace(/\s+/g, " ").trim();
+    const line = role + ":" + text + "\n";
+    hash.update(line);
+  }
+  return hash.digest("hex");
+}
+
+export function shouldReuseSummary(
+  cachedHash: string | undefined,
+  messages: RecentMessage[]
+): { hash: string; reuse: boolean } {
   const hash = recentMessagesHash(messages);
   return { hash, reuse: !!cachedHash && cachedHash === hash };
 }

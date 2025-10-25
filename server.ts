@@ -5,7 +5,7 @@ const port = 3000;
 import { rename } from "fs/promises";
 import { createOpencodeClient } from "@opencode-ai/sdk";
 import { listMessages, sendMessage as rawSendMessage } from "./src/oc-client";
-import { shouldReuseSummary } from './src/hash';
+import { shouldReuseSummary } from "./src/hash";
 
 // In-memory IP address key-value store (simple list of IPs)
 // Accepts only IPv4 dotted quads; prevents duplicates.
@@ -64,25 +64,32 @@ interface CachedSessions {
 }
 const cachedSessionsByIp: Record<string, CachedSessions | null> = {};
 // Per-session summary cache to avoid repeated summarizer calls when no new messages
-const summaryCacheBySession: Record<string, { messageHash: string; summary: string; action: boolean; cachedAt: number }> = {};
+const summaryCacheBySession: Record<
+  string,
+  { messageHash: string; summary: string; action: boolean; cachedAt: number }
+> = {};
 const SUMMARY_CACHE_TTL_MS = 15 * 60 * 1000; // 15m max retention
 const SUMMARY_NEGATIVE_TTL_MS = 60 * 1000; // 1m for failed summaries
 let lastSummaryPrune = Date.now();
 // Track in-flight asynchronous summarization per session key to avoid duplicate calls
-const SUMMARY_DEBOUNCE_MS = 800; // delay before starting summarization to batch bursts
+const SUMMARY_DEBOUNCE_MS = 2000; // delay before starting summarization to batch bursts
 const summaryDebounceTimers: Record<string, number> = {};
 const inFlightSummary: Record<string, boolean> = {};
 
-
 // Escape HTML
 const ESCAPE_RE = /[&<>"]/g;
-const ESCAPE_MAP: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+const ESCAPE_MAP: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+};
 function escapeHtml(text: string): string {
-  if (typeof text !== 'string' || text === '') return String(text || '');
+  if (typeof text !== "string" || text === "") return String(text || "");
   ESCAPE_RE.lastIndex = 0;
   if (!ESCAPE_RE.test(text)) return text;
   ESCAPE_RE.lastIndex = 0;
-  let out = '';
+  let out = "";
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = ESCAPE_RE.exec(text))) {
@@ -235,7 +242,8 @@ function messagesSSE(ip: string, sessionId: string): Response {
       async function push() {
         try {
           const messages = await fetchMessages(ip, sessionId);
-          const displayMessages = messages.length > 10 ? messages.slice(-10) : messages;
+          const displayMessages =
+            messages.length > 10 ? messages.slice(-10) : messages;
           const messageItems = displayMessages.length
             ? displayMessages
                 .map((m: any) => {
@@ -246,69 +254,116 @@ function messagesSSE(ip: string, sessionId: string): Response {
                 .join("")
             : '<div class="empty">(no messages)</div>';
           // Build or reuse summarizer-based summary using dedicated summarizer session (non-blocking)
-           let summaryText = '(no recent messages)';
-           const skipSummary = messages.length === 0;
+          let summaryText = "(no recent messages)";
+          const skipSummary = messages.length === 0;
           const totalCount = messages.length;
           const cacheKey = `${ip}::${sessionId}`;
-// Periodic prune
-           const nowTs = Date.now();
-           if (nowTs - lastSummaryPrune > 30000) {
-             let removed = 0;
-             for (const k in summaryCacheBySession) {
-               const entry = summaryCacheBySession[k];
-               const age = nowTs - entry.cachedAt;
-               if ((entry.summary === '(summary failed)' && age > SUMMARY_NEGATIVE_TTL_MS) || age > SUMMARY_CACHE_TTL_MS) {
-                 delete summaryCacheBySession[k];
-                 removed++;
-               }
-             }
-             if (removed) console.log('summary cache pruned', { removed });
-             lastSummaryPrune = nowTs;
-           }
-            const cached = summaryCacheBySession[cacheKey];
-            const recentForHash = messages.slice(-3).map((m: any) => ({ role: (m.role || 'message'), text: (m.parts?.[0]?.text || m.text || '').replace(/\s+/g,' ').trim() }));
-            const { hash: recentHash, reuse } = shouldReuseSummary(cached?.messageHash, recentForHash);
-            if (reuse && cached) {
-              summaryText = cached.summary;
-              console.log('summary reuse', { cacheKey, hash: recentHash });
-               } else {
-               summaryText = skipSummary ? '(no recent messages)' : '...';
-               // Debounce summary recompute to batch rapid message bursts
-               if (summaryDebounceTimers[cacheKey]) {
-                 clearTimeout(summaryDebounceTimers[cacheKey]);
-                 delete summaryDebounceTimers[cacheKey];
-               }
-               if (!skipSummary && !inFlightSummary[cacheKey]) {
-                 summaryDebounceTimers[cacheKey] = setTimeout(() => {
-                   delete summaryDebounceTimers[cacheKey];
-                   if (inFlightSummary[cacheKey]) return; // guard if already running
-                   inFlightSummary[cacheKey] = true;
-                   console.log('summary recompute start', { cacheKey, oldHash: cached?.messageHash, newHash: recentHash });
-                   (async () => {
-                     try {
-                       const remoteBase = resolveBaseUrl(ip);
-                       const { summarizeMessages } = await import('./src/oc-client');
-                       const summ = await summarizeMessages(remoteBase, recentForHash, sessionId);
-                       if (summ.ok) {
-                         summaryCacheBySession[cacheKey] = { messageHash: recentHash, summary: summ.summary || '(empty summary)', action: summ.action, cachedAt: Date.now() };
-                         console.log('summary recompute success', { cacheKey, hash: recentHash });
-                       } else {
-                         summaryCacheBySession[cacheKey] = { messageHash: recentHash, summary: '(summary failed)', action: false, cachedAt: Date.now() };
-                         console.warn('summary recompute failed', { cacheKey, hash: recentHash });
-                       }
-                     } catch (e) {
-                       console.error('Summarizer summary error', (e as Error).message);
-                     } finally {
-                       delete inFlightSummary[cacheKey];
-                     }
-                   })();
-                 }, SUMMARY_DEBOUNCE_MS) as unknown as number;
-               }
+          // Periodic prune
+          const nowTs = Date.now();
+          if (nowTs - lastSummaryPrune > 30000) {
+            let removed = 0;
+            for (const k in summaryCacheBySession) {
+              const entry = summaryCacheBySession[k];
+              const age = nowTs - entry.cachedAt;
+              if (
+                (entry.summary === "(summary failed)" &&
+                  age > SUMMARY_NEGATIVE_TTL_MS) ||
+                age > SUMMARY_CACHE_TTL_MS
+              ) {
+                delete summaryCacheBySession[k];
+                removed++;
+              }
             }
+            if (removed) console.log("summary cache pruned", { removed });
+            lastSummaryPrune = nowTs;
+          }
+          const cached = summaryCacheBySession[cacheKey];
+          const recentForHash = messages.slice(-3).map((m: any) => ({
+            role: m.role || "message",
+            text: (m.parts?.[0]?.text || m.text || "")
+              .replace(/\s+/g, " ")
+              .trim(),
+          }));
+          const { hash: recentHash, reuse } = shouldReuseSummary(
+            cached?.messageHash,
+            recentForHash
+          );
+          if (reuse && cached) {
+            summaryText = cached.summary;
+            console.log("summary reuse", { cacheKey, hash: recentHash });
+          } else {
+            summaryText = skipSummary ? "(no recent messages)" : "...";
+            // Debounce summary recompute to batch rapid message bursts
+            if (summaryDebounceTimers[cacheKey]) {
+              clearTimeout(summaryDebounceTimers[cacheKey]);
+              delete summaryDebounceTimers[cacheKey];
+            }
+            const lastRole = messages[messages.length - 1]?.role || ""; // only summarize after assistant turn
+            const shouldSummarize = lastRole === "assistant";
+            if (!skipSummary && shouldSummarize && !inFlightSummary[cacheKey]) {
+              summaryDebounceTimers[cacheKey] = setTimeout(() => {
+                delete summaryDebounceTimers[cacheKey];
+                if (inFlightSummary[cacheKey]) return; // guard if already running
+                inFlightSummary[cacheKey] = true;
+                console.log("summary recompute start", {
+                  cacheKey,
+                  oldHash: cached?.messageHash,
+                  newHash: recentHash,
+                });
+                (async () => {
+                  try {
+                    const remoteBase = resolveBaseUrl(ip);
+                    const { summarizeMessages } = await import(
+                      "./src/oc-client"
+                    );
+                    const summ = await summarizeMessages(
+                      remoteBase,
+                      recentForHash,
+                      sessionId
+                    );
+                    if (summ.ok) {
+                      summaryCacheBySession[cacheKey] = {
+                        messageHash: recentHash,
+                        summary: summ.summary || "(empty summary)",
+                        action: summ.action,
+                        cachedAt: Date.now(),
+                      };
+                      console.log("summary recompute success", {
+                        cacheKey,
+                        hash: recentHash,
+                      });
+                    } else {
+                      summaryCacheBySession[cacheKey] = {
+                        messageHash: recentHash,
+                        summary: "(summary failed)",
+                        action: false,
+                        cachedAt: Date.now(),
+                      };
+                      console.warn("summary recompute failed", {
+                        cacheKey,
+                        hash: recentHash,
+                      });
+                    }
+                  } catch (e) {
+                    console.error(
+                      "Summarizer summary error",
+                      (e as Error).message
+                    );
+                  } finally {
+                    delete inFlightSummary[cacheKey];
+                  }
+                })();
+              }, SUMMARY_DEBOUNCE_MS) as unknown as number;
+            }
+          }
           const cacheAfter = summaryCacheBySession[cacheKey];
-          const actionFlag = cacheAfter ? cacheAfter.action : /\|\s*action\s*=\s*yes/i.test(summaryText);
-           const badge = actionFlag ? '<span style="background:#ffd54f;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">action</span>' : '<span style="background:#ccc;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">info</span>';
-           const html = totalCount === 0 ? `<div id=\"messages-list\">${messageItems}</div>` : `<div id=\"messages-list\">${messageItems}<div class=\"messages-summary\" style=\"opacity:.55;margin-top:4px\">summary: ${escapeHtml(summaryText)} ${badge}</div></div>`;
+          const actionFlag = cacheAfter
+            ? cacheAfter.action
+            : /\|\s*action\s*=\s*yes/i.test(summaryText);
+          const badge = actionFlag
+            ? '<span style="background:#ffd54f;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">action</span>'
+            : '<span style="background:#ccc;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">info</span>';
+          const html = totalCount === 0 ? `<div id=\"messages-list\">${messageItems}</div>` : `<div id=\"messages-list\">${messageItems}<div class=\"messages-summary\" style=\"opacity:.55;margin-top:4px\">summary: ${escapeHtml(summaryText)} ${badge}</div></div>`;
           const statusHtml = `<div id="messages-status" class="status">Updated ${new Date().toLocaleTimeString()}</div>`;
           try {
             controller.enqueue(
@@ -999,7 +1054,11 @@ const server = Bun.serve({
       });
     }
 
-    if (url.pathname === '/client.js') { return new Response(Bun.file('public/client.js'), { headers: { 'Content-Type': 'application/javascript; charset=utf-8' } }); }
+    if (url.pathname === "/client.js") {
+      return new Response(Bun.file("public/client.js"), {
+        headers: { "Content-Type": "application/javascript; charset=utf-8" },
+      });
+    }
     return new Response("Not Found", { status: 404 });
   },
 });
