@@ -64,6 +64,8 @@ interface CachedSessions {
 const cachedSessionsByIp: Record<string, CachedSessions | null> = {};
 // Per-session summary cache to avoid repeated summarizer calls when no new messages
 const summaryCacheBySession: Record<string, { messageCount: number; summary: string; action: boolean; cachedAt: number }> = {};
+// Track in-flight asynchronous summarization per session key to avoid duplicate calls
+const inFlightSummary: Record<string, boolean> = {};
 
 // Escape HTML
 const ESCAPE_RE = /[&<>"]/g;
@@ -236,35 +238,42 @@ function messagesSSE(ip: string, sessionId: string): Response {
                 })
                 .join("")
             : '<div class="empty">(no messages)</div>';
-          // Build or reuse summarizer-based summary using dedicated summarizer session
+          // Build or reuse summarizer-based summary using dedicated summarizer session (non-blocking)
           let summaryText = '(no recent messages)';
           const totalCount = messages.length;
           const cacheKey = `${ip}::${sessionId}`;
           const cached = summaryCacheBySession[cacheKey];
-           const nowTs = Date.now();
-           if (cached && cached.messageCount === totalCount && (nowTs - cached.cachedAt) < 5000) {
-             summaryText = cached.summary;
-           } else {
-            // Collect last up to 3 messages (user + assistant) for summarizer context
-            const recent = messages.slice(-3);
-            const combined = recent.map((m: any) => `${m.role}: ${(m.parts?.[0]?.text || m.text || '').replace(/\s+/g,' ').trim()}`).join('\n');
-            // Ensure summarizer session for remote IP host (port 2000)
-            const remoteBase = resolveBaseUrl(ip);
-            try {
-              // Reuse summarizer session via ensureSummarizer (imported below inline to avoid cycle)
-               const { summarizeMessages } = await import('./src/oc-client');
-               const recents = recent.map((m: any) => ({ role: m.role || 'message', text: (m.parts?.[0]?.text || m.text || '').replace(/\s+/g,' ').trim() }));
-               const summ = await summarizeMessages(remoteBase, recents);
-               if (summ.ok) {
-                 summaryText = summ.summary || summaryText;
-                 summaryCacheBySession[cacheKey] = { messageCount: totalCount, summary: summaryText, action: summ.action, cachedAt: Date.now() };
-               }
-            } catch (e) {
-              console.error('Summarizer summary error', (e as Error).message);
+          const nowTs = Date.now();
+          if (cached && cached.messageCount === totalCount && (nowTs - cached.cachedAt) < 5000) {
+            summaryText = cached.summary;
+          } else {
+            // If a fetch is already in-flight, show placeholder; else start async fetch without awaiting.
+            summaryText = cached ? cached.summary : '...';
+            if (!inFlightSummary[cacheKey]) {
+              inFlightSummary[cacheKey] = true;
+              (async () => {
+                try {
+                  const recent = messages.slice(-3);
+                  const remoteBase = resolveBaseUrl(ip);
+                  const { summarizeMessages } = await import('./src/oc-client');
+                  const recents = recent.map((m: any) => ({ role: m.role || 'message', text: (m.parts?.[0]?.text || m.text || '').replace(/\s+/g,' ').trim() }));
+                  const summ = await summarizeMessages(remoteBase, recents);
+                  if (summ.ok) {
+                    summaryCacheBySession[cacheKey] = { messageCount: totalCount, summary: summ.summary || '(empty summary)', action: summ.action, cachedAt: Date.now() };
+                  } else {
+                    // Cache negative result briefly to avoid hammering
+                    summaryCacheBySession[cacheKey] = { messageCount: totalCount, summary: '(summary failed)', action: false, cachedAt: Date.now() };
+                  }
+                } catch (e) {
+                  console.error('Summarizer summary error', (e as Error).message);
+                } finally {
+                  delete inFlightSummary[cacheKey];
+                }
+              })();
             }
           }
-           const cacheAfter = summaryCacheBySession[cacheKey];
-           const actionFlag = cacheAfter ? cacheAfter.action : /\|\s*action\s*=\s*yes/i.test(summaryText);
+          const cacheAfter = summaryCacheBySession[cacheKey];
+          const actionFlag = cacheAfter ? cacheAfter.action : /\|\s*action\s*=\s*yes/i.test(summaryText);
            const badge = actionFlag ? '<span style="background:#ffd54f;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">action</span>' : '<span style="background:#ccc;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">info</span>';
            const html = `<div id=\"messages-list\">${messageItems}<div class=\"messages-summary\" style=\"opacity:.55;margin-top:4px\">summary: ${escapeHtml(summaryText)} ${badge}</div></div>`;
           const statusHtml = `<div id="messages-status" class="status">Updated ${new Date().toLocaleTimeString()}</div>`;
