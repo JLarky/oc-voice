@@ -167,13 +167,23 @@ const server = Bun.serve({
             const detail = await (client as any).session.get?.({ params: { id: sid } });
             if (detail && detail.id === sid) exists = true;
           } catch { /* ignore */ }
-          // Fallback to list if not confirmed
-            if (!exists) {
-              try {
-                const list = await client.session.list();
-                exists = Array.isArray(list) && list.some((s: any) => s.id === sid);
-              } catch { /* ignore */ }
-            }
+          // Raw endpoint fetch fallback if still not exists
+          if (!exists) {
+            try {
+              const rawRes = await fetch(`${OPENCODE_BASE_URL}/session/${sid}`);
+              if (rawRes.ok) {
+                const rawJson = await rawRes.json().catch(() => null);
+                if (rawJson && rawJson.id === sid) exists = true;
+              }
+            } catch { /* ignore */ }
+          }
+          // Fallback to list if still not confirmed
+          if (!exists) {
+            try {
+              const list = await client.session.list();
+              exists = Array.isArray(list) && list.some((s: any) => s.id === sid);
+            } catch { /* ignore */ }
+          }
           if (!exists) return Response.redirect("/", 302);
         } catch { /* ignore outer */ }
         const page = `<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"/><title>Session ${sid}</title><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .small{font-size:.75rem;color:#666;} a{color:#0366d6;text-decoration:none;} a:hover{text-decoration:underline;} </style></head><body><h1>Session ${sid}</h1><div><a href=\"/\">&larr; Back to sessions</a></div><form id=\"session-message-form\"><div class=\"row\"><input id=\"session-message-input\" type=\"text\" placeholder=\"Enter message\" /><button type=\"submit\">Send</button></div><div id=\"session-message-result\" class=\"small\"></div></form><script>window.__SESSION_ID__='${sid}';</script><script type=\"module\" src=\"/client.js\"></script></body></html>`;
