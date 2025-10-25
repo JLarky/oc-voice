@@ -214,8 +214,9 @@ function messagesSSE(ip: string, sessionId: string): Response {
       async function push() {
         try {
           const messages = await fetchMessages(ip, sessionId);
-          const messageItems = messages.length
-            ? messages
+          const displayMessages = messages.length > 10 ? messages.slice(-10) : messages;
+          const messageItems = displayMessages.length
+            ? displayMessages
                 .map((m: any) => {
                   const role = escapeHtml(m.role || "message");
                   const text = escapeHtml(m.parts?.[0]?.text || m.text || "");
@@ -223,7 +224,7 @@ function messagesSSE(ip: string, sessionId: string): Response {
                 })
                 .join("")
             : '<div class="empty">(no messages)</div>';
-          let runningHtml = '';try { const lastRole = messages[messages.length-1]?.role?.toLowerCase() || ''; const isAssistantLast = lastRole === 'assistant' || lastRole === 'system'; if (!isAssistantLast) { const detailRes = await fetch(`${resolveBaseUrl(ip)}/session/${sessionId}`).catch(() => null); if (detailRes && (detailRes as any).ok) { const detail = await (detailRes as any).json().catch(() => null); const title = detail?.title || ''; if (/^(Calculating|Running|Executing|Processing|Building)\b/i.test(title)) { runningHtml = '<div class="message-running">running...</div>'; } } } } catch {} const html = `<div id=\"messages-list\">${messageItems}${runningHtml}</div>`;
+          const html = `<div id=\"messages-list\">${messageItems}</div>`;
           const statusHtml = `<div id="messages-status" class="status">Updated ${new Date().toLocaleTimeString()}</div>`;
           try {
             controller.enqueue(
@@ -865,7 +866,7 @@ const server = Bun.serve({
         } catch {}
         const page = `<!doctype html><html lang="en"><head><meta charset="UTF-8"/><title>Session ${escapeHtml(
           sessionTitle || sid
-        )}</title><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:900px;margin-left:auto;margin-right:auto;} a{color:#0366d6;} input,textarea,button{padding:.5rem;font-size:.95rem;border:1px solid #ccc;border-radius:3px;} button{background:#0366d6;color:white;cursor:pointer;border:none;} button:hover{background:#0256c7;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .status{font-size:.75rem;color:#666;margin-bottom:1rem;} .result{font-size:.75rem;color:#666;margin-top:.5rem;} #messages-list{border:1px solid #ddd;padding:1rem;border-radius:4px;margin-top:1rem;max-height:400px;overflow-y:auto;} .message{padding:.5rem;border-bottom:1px solid #eee;font-size:.9rem;} .message-role{font-weight:bold;color:#0366d6;} .message-text{margin-top:.25rem;white-space:pre-wrap;word-break:break-word;} .message-running{padding:.5rem;margin-top:.5rem;font-size:.8rem;font-style:italic;background:#fff7e6;border:1px dashed #e0b66a;color:#aa6600;border-radius:3px;animation:mrblink 1.2s linear infinite;} @keyframes mrblink{0%{opacity:.35;}50%{opacity:1;}100%{opacity:.35;}} .session-id{font-size:.6rem;color:#666;margin-top:.25rem;margin-bottom:1rem;} </style></head><body><h1>${escapeHtml(
+        )}</title><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:900px;margin-left:auto;margin-right:auto;} a{color:#0366d6;} input,textarea,button{padding:.5rem;font-size:.95rem;border:1px solid #ccc;border-radius:3px;} button{background:#0366d6;color:white;cursor:pointer;border:none;} button:hover{background:#0256c7;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .status{font-size:.75rem;color:#666;margin-bottom:1rem;} .result{font-size:.75rem;color:#666;margin-top:.5rem;} #messages-list{border:1px solid #ddd;padding:1rem;border-radius:4px;margin-top:1rem;max-height:400px;overflow-y:auto;} .message{padding:.5rem;border-bottom:1px solid #eee;font-size:.9rem;} .message-role{font-weight:bold;color:#0366d6;} .message-text{margin-top:.25rem;white-space:pre-wrap;word-break:break-word;}  .session-id{font-size:.6rem;color:#666;margin-top:.25rem;margin-bottom:1rem;} </style></head><body><h1>${escapeHtml(
           sessionTitle || sid
         )}</h1><div><a href="/sessions/${escapeHtml(
           ip
