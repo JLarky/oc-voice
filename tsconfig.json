@@ -7,7 +7,7 @@
     "moduleResolution": "Node",
     "strict": true,
     "allowJs": true,
-    "types": ["node", "./types/bun-shims"],
+    "types": ["bun-types", "node"],
     "resolveJsonModule": true
   },
   "exclude": ["playpen"]
