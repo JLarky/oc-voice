@@ -182,13 +182,16 @@ export async function ensureSummarizer(remoteHost: string, opts: EnsureSummarize
 // Summarize recent messages using dedicated summarizer session.
 // recentMessages: array of last messages with role + text
 // Returns summary line plus parsed action flag.
-export async function summarizeMessages(remoteHost: string, recentMessages: { role: string; text: string }[]): Promise<{ summary: string; action: boolean; raw: string; ok: boolean; error?: string }> {
+export async function summarizeMessages(remoteHost: string, recentMessages: { role: string; text: string }[], targetSessionId?: string): Promise<{ summary: string; action: boolean; raw: string; ok: boolean; error?: string }> {
   const combined = recentMessages.map(m => `${m.role}: ${m.text.replace(/\s+/g,' ').trim()}`).join('\n');
   const prompt = 'Summarize the following conversation focusing on latest user intent in <=18 words. Append |action=yes if user requests guidance/help else |action=no. Output ONLY that line.';
   try {
     const summResult = await ensureSummarizer(remoteHost, { title: 'summarizer' });
     const summSession = summResult.session?.id;
     if (!summSession) return { summary: '', action: false, raw: '', ok: false, error: 'No summarizer session' };
+    if (targetSessionId && targetSessionId === summSession) {
+      return { summary: "can't summarize", action: false, raw: "can't summarize", ok: true };
+    }
     const sendCombined = await sendMessage(remoteHost, summSession, combined + '\n\n' + prompt);
     if (!sendCombined.ok) return { summary: '', action: false, raw: '', ok: false, error: sendCombined.error || 'Summarize send failed' };
     const raw = sendCombined.replyTexts.join('\n').trim();

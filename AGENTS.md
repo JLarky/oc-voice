@@ -56,6 +56,7 @@ Entire repo (server, client, scripts).
 ## Responses & Performance
 - Return `Response` directly; explicit status codes; SSE lines: `event:` + name, `data:` + JSON, blank line
 - Lightweight in-memory caches; dedupe by `id`; avoid unbounded growth
+- Summary cache: hash last 3 messages via fnv1a; reuse when hash matches; 15m TTL success; 1m TTL failed '(summary failed)'; prune every ~30s; shouldReuseSummary used for clarity; in-flight guard prevents duplicate summarizer calls
 
 ## HTML & Concurrency
 - Minimal inline styles; escape dynamic text before injecting

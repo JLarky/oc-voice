@@ -31,7 +31,7 @@ describe('summarizeMessages', () => {
       { ok: true, json: { parts: [{ type: 'text', text: 'User wants help |action=yes' }] } },
     ]);
     const recent = [ { role: 'user', text: 'How do I deploy?' } ];
-    const res = await summarizeMessages('http://127.0.0.1:2000', recent);
+    const res = await summarizeMessages('http://127.0.0.1:2000', recent, 'sess-xyz');
     expect(res.ok).toBe(true);
     expect(res.action).toBe(true);
     expect(res.summary).toContain('|action=yes');
@@ -47,7 +47,7 @@ describe('summarizeMessages', () => {
       { ok: true, json: { parts: [{ type: 'text', text: 'General info only |action=no' }] } },
     ]);
     const recent = [ { role: 'assistant', text: 'Sure.' }, { role: 'user', text: 'Thanks.' } ];
-    const res = await summarizeMessages('http://127.0.0.1:2000', recent);
+    const res = await summarizeMessages('http://127.0.0.1:2000', recent, 'sess-xyz');
     expect(res.ok).toBe(true);
     expect(res.action).toBe(false);
     expect(res.summary).toContain('|action=no');
@@ -60,9 +60,19 @@ describe('summarizeMessages', () => {
       // attempt create fails
       { ok: false, status: 500, json: { error: 'fail' } },
     ]);
-    const res = await summarizeMessages('http://127.0.0.1:2000', [ { role: 'user', text: 'Ping' } ]);
+    const res = await summarizeMessages('http://127.0.0.1:2000', [ { role: 'user', text: 'Ping' } ], 'sess-xyz');
     expect(res.ok).toBe(false);
     expect(res.error).toBeDefined();
+    expect(res.action).toBe(false);
+  });
+  it('returns cannot summarize when target equals summarizer session', async () => {
+    mockFetchSequence([
+      { ok: true, json: [{ id: 'sess-guard', title: 'summarizer' }] },
+    ]);
+    const recent = [ { role: 'user', text: 'Hello there' } ];
+    const res = await summarizeMessages('http://127.0.0.1:2000', recent, 'sess-guard');
+    expect(res.ok).toBe(true);
+    expect(res.summary).toBe("can't summarize");
     expect(res.action).toBe(false);
   });
 });

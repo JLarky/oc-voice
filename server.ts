@@ -5,6 +5,7 @@ const port = 3000;
 import { rename } from "fs/promises";
 import { createOpencodeClient } from "@opencode-ai/sdk";
 import { listMessages, sendMessage as rawSendMessage } from "./src/oc-client";
+import { shouldReuseSummary } from './src/hash';
 
 // In-memory IP address key-value store (simple list of IPs)
 // Accepts only IPv4 dotted quads; prevents duplicates.
@@ -64,22 +65,12 @@ interface CachedSessions {
 const cachedSessionsByIp: Record<string, CachedSessions | null> = {};
 // Per-session summary cache to avoid repeated summarizer calls when no new messages
 const summaryCacheBySession: Record<string, { messageHash: string; summary: string; action: boolean; cachedAt: number }> = {};
+const SUMMARY_CACHE_TTL_MS = 15 * 60 * 1000; // 15m max retention
+const SUMMARY_NEGATIVE_TTL_MS = 60 * 1000; // 1m for failed summaries
+let lastSummaryPrune = Date.now();
 // Track in-flight asynchronous summarization per session key to avoid duplicate calls
 const inFlightSummary: Record<string, boolean> = {};
-function hashRecentMessages(msgs: any[]): string {
-  // Simple FNV-1a hash over normalized role:text lines
-  let h = 0x811c9dc5;
-  for (const m of msgs) {
-    const role = (m.role || 'message').toLowerCase();
-    const text = (m.parts?.[0]?.text || m.text || '').replace(/\s+/g,' ').trim();
-    const line = role + ':' + text + '\n';
-    for (let i=0;i<line.length;i++) {
-      h ^= line.charCodeAt(i);
-      h = (h * 0x01000193) >>> 0; // FNV-1a prime
-    }
-  }
-  return h.toString(16);
-}
+
 
 // Escape HTML
 const ESCAPE_RE = /[&<>"]/g;
@@ -256,38 +247,52 @@ function messagesSSE(ip: string, sessionId: string): Response {
           let summaryText = '(no recent messages)';
           const totalCount = messages.length;
           const cacheKey = `${ip}::${sessionId}`;
-          const cached = summaryCacheBySession[cacheKey];
-          const nowTs = Date.now();
-          const recentForHash = messages.slice(-3);
-          const recentHash = hashRecentMessages(recentForHash);
-          if (cached && cached.messageHash === recentHash) {
-            summaryText = cached.summary;
-          } else {
-            // If a fetch is already in-flight, show placeholder; else start async fetch without awaiting.
-            summaryText = (!cached || cached.messageHash !== recentHash) ? '...' : cached.summary;
-            if (!inFlightSummary[cacheKey]) {
-              inFlightSummary[cacheKey] = true;
-              (async () => {
-                try {
-                  const recent = messages.slice(-3);
-                  const remoteBase = resolveBaseUrl(ip);
-                  const { summarizeMessages } = await import('./src/oc-client');
-                  const recents = recent.map((m: any) => ({ role: m.role || 'message', text: (m.parts?.[0]?.text || m.text || '').replace(/\s+/g,' ').trim() }));
-                  const summ = await summarizeMessages(remoteBase, recents);
-                  if (summ.ok) {
-                    summaryCacheBySession[cacheKey] = { messageHash: recentHash, summary: summ.summary || '(empty summary)', action: summ.action, cachedAt: Date.now() };
-                  } else {
-                    // Cache negative result briefly to avoid hammering
-                    summaryCacheBySession[cacheKey] = { messageHash: recentHash, summary: '(summary failed)', action: false, cachedAt: Date.now() };
+// Periodic prune
+           const nowTs = Date.now();
+           if (nowTs - lastSummaryPrune > 30000) {
+             let removed = 0;
+             for (const k in summaryCacheBySession) {
+               const entry = summaryCacheBySession[k];
+               const age = nowTs - entry.cachedAt;
+               if ((entry.summary === '(summary failed)' && age > SUMMARY_NEGATIVE_TTL_MS) || age > SUMMARY_CACHE_TTL_MS) {
+                 delete summaryCacheBySession[k];
+                 removed++;
+               }
+             }
+             if (removed) console.log('summary cache pruned', { removed });
+             lastSummaryPrune = nowTs;
+           }
+            const cached = summaryCacheBySession[cacheKey];
+            const recentForHash = messages.slice(-3).map((m: any) => ({ role: (m.role || 'message'), text: (m.parts?.[0]?.text || m.text || '').replace(/\s+/g,' ').trim() }));
+            const { hash: recentHash, reuse } = shouldReuseSummary(cached?.messageHash, recentForHash);
+            if (reuse && cached) {
+              summaryText = cached.summary;
+              console.log('summary reuse', { cacheKey, hash: recentHash });
+            } else {
+              summaryText = '...';
+              if (!inFlightSummary[cacheKey]) {
+                inFlightSummary[cacheKey] = true;
+                console.log('summary recompute start', { cacheKey, oldHash: cached?.messageHash, newHash: recentHash });
+                (async () => {
+                  try {
+                    const remoteBase = resolveBaseUrl(ip);
+                    const { summarizeMessages } = await import('./src/oc-client');
+                    const summ = await summarizeMessages(remoteBase, recentForHash, sessionId);
+                    if (summ.ok) {
+                      summaryCacheBySession[cacheKey] = { messageHash: recentHash, summary: summ.summary || '(empty summary)', action: summ.action, cachedAt: Date.now() };
+                      console.log('summary recompute success', { cacheKey, hash: recentHash });
+                    } else {
+                      summaryCacheBySession[cacheKey] = { messageHash: recentHash, summary: '(summary failed)', action: false, cachedAt: Date.now() };
+                      console.warn('summary recompute failed', { cacheKey, hash: recentHash });
+                    }
+                  } catch (e) {
+                    console.error('Summarizer summary error', (e as Error).message);
+                  } finally {
+                    delete inFlightSummary[cacheKey];
                   }
-                } catch (e) {
-                  console.error('Summarizer summary error', (e as Error).message);
-                } finally {
-                  delete inFlightSummary[cacheKey];
-                }
-              })();
+                })();
+              }
             }
-          }
           const cacheAfter = summaryCacheBySession[cacheKey];
           const actionFlag = cacheAfter ? cacheAfter.action : /\|\s*action\s*=\s*yes/i.test(summaryText);
            const badge = actionFlag ? '<span style="background:#ffd54f;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">action</span>' : '<span style="background:#ccc;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">info</span>';
