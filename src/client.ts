@@ -39,8 +39,8 @@ function setupSessionsSSE() {
   es.addEventListener("sessions", (ev: MessageEvent) => {
     try {
       const payload = JSON.parse(ev.data);
-      const arr = Array.isArray(payload.sessions) ? payload.sessions : [];
-       listEl.innerHTML = arr.length ? arr.map((s: any) => `<li><a href='/session/${s.id}'><span class='id'>${s.id}</span></a> - ${s.title || "(no title)"} <span class='small'>${s.ageSeconds}s</span></li>`).join("") : "<li>(none)</li>";
+       const arr = Array.isArray(payload.sessions) ? payload.sessions : [];
+       listEl.innerHTML = arr.length ? arr.map((s: any) => `<li><a href='/session/${s.id}'><span class='id'>${s.id}</span></a> - ${s.title || "(no title)"}</li>`).join("") : "<li>(none)</li>";
       statusEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
     } catch (e) {
       statusEl.textContent = `Bad data: ${(e as Error).message}`;
