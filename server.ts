@@ -69,6 +69,8 @@ const SUMMARY_CACHE_TTL_MS = 15 * 60 * 1000; // 15m max retention
 const SUMMARY_NEGATIVE_TTL_MS = 60 * 1000; // 1m for failed summaries
 let lastSummaryPrune = Date.now();
 // Track in-flight asynchronous summarization per session key to avoid duplicate calls
+const SUMMARY_DEBOUNCE_MS = 800; // delay before starting summarization to batch bursts
+const summaryDebounceTimers: Record<string, number> = {};
 const inFlightSummary: Record<string, boolean> = {};
 
 
@@ -269,30 +271,39 @@ function messagesSSE(ip: string, sessionId: string): Response {
             if (reuse && cached) {
               summaryText = cached.summary;
               console.log('summary reuse', { cacheKey, hash: recentHash });
-             } else {
+               } else {
                summaryText = skipSummary ? '(no recent messages)' : '...';
+               // Debounce summary recompute to batch rapid message bursts
+               if (summaryDebounceTimers[cacheKey]) {
+                 clearTimeout(summaryDebounceTimers[cacheKey]);
+                 delete summaryDebounceTimers[cacheKey];
+               }
                if (!skipSummary && !inFlightSummary[cacheKey]) {
-                inFlightSummary[cacheKey] = true;
-                console.log('summary recompute start', { cacheKey, oldHash: cached?.messageHash, newHash: recentHash });
-                (async () => {
-                  try {
-                    const remoteBase = resolveBaseUrl(ip);
-                    const { summarizeMessages } = await import('./src/oc-client');
-                    const summ = await summarizeMessages(remoteBase, recentForHash, sessionId);
-                    if (summ.ok) {
-                      summaryCacheBySession[cacheKey] = { messageHash: recentHash, summary: summ.summary || '(empty summary)', action: summ.action, cachedAt: Date.now() };
-                      console.log('summary recompute success', { cacheKey, hash: recentHash });
-                    } else {
-                      summaryCacheBySession[cacheKey] = { messageHash: recentHash, summary: '(summary failed)', action: false, cachedAt: Date.now() };
-                      console.warn('summary recompute failed', { cacheKey, hash: recentHash });
-                    }
-                  } catch (e) {
-                    console.error('Summarizer summary error', (e as Error).message);
-                  } finally {
-                    delete inFlightSummary[cacheKey];
-                  }
-                })();
-              }
+                 summaryDebounceTimers[cacheKey] = setTimeout(() => {
+                   delete summaryDebounceTimers[cacheKey];
+                   if (inFlightSummary[cacheKey]) return; // guard if already running
+                   inFlightSummary[cacheKey] = true;
+                   console.log('summary recompute start', { cacheKey, oldHash: cached?.messageHash, newHash: recentHash });
+                   (async () => {
+                     try {
+                       const remoteBase = resolveBaseUrl(ip);
+                       const { summarizeMessages } = await import('./src/oc-client');
+                       const summ = await summarizeMessages(remoteBase, recentForHash, sessionId);
+                       if (summ.ok) {
+                         summaryCacheBySession[cacheKey] = { messageHash: recentHash, summary: summ.summary || '(empty summary)', action: summ.action, cachedAt: Date.now() };
+                         console.log('summary recompute success', { cacheKey, hash: recentHash });
+                       } else {
+                         summaryCacheBySession[cacheKey] = { messageHash: recentHash, summary: '(summary failed)', action: false, cachedAt: Date.now() };
+                         console.warn('summary recompute failed', { cacheKey, hash: recentHash });
+                       }
+                     } catch (e) {
+                       console.error('Summarizer summary error', (e as Error).message);
+                     } finally {
+                       delete inFlightSummary[cacheKey];
+                     }
+                   })();
+                 }, SUMMARY_DEBOUNCE_MS) as unknown as number;
+               }
             }
           const cacheAfter = summaryCacheBySession[cacheKey];
           const actionFlag = cacheAfter ? cacheAfter.action : /\|\s*action\s*=\s*yes/i.test(summaryText);
