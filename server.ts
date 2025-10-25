@@ -63,9 +63,23 @@ interface CachedSessions {
 }
 const cachedSessionsByIp: Record<string, CachedSessions | null> = {};
 // Per-session summary cache to avoid repeated summarizer calls when no new messages
-const summaryCacheBySession: Record<string, { messageCount: number; summary: string; action: boolean; cachedAt: number }> = {};
+const summaryCacheBySession: Record<string, { messageHash: string; summary: string; action: boolean; cachedAt: number }> = {};
 // Track in-flight asynchronous summarization per session key to avoid duplicate calls
 const inFlightSummary: Record<string, boolean> = {};
+function hashRecentMessages(msgs: any[]): string {
+  // Simple FNV-1a hash over normalized role:text lines
+  let h = 0x811c9dc5;
+  for (const m of msgs) {
+    const role = (m.role || 'message').toLowerCase();
+    const text = (m.parts?.[0]?.text || m.text || '').replace(/\s+/g,' ').trim();
+    const line = role + ':' + text + '\n';
+    for (let i=0;i<line.length;i++) {
+      h ^= line.charCodeAt(i);
+      h = (h * 0x01000193) >>> 0; // FNV-1a prime
+    }
+  }
+  return h.toString(16);
+}
 
 // Escape HTML
 const ESCAPE_RE = /[&<>"]/g;
@@ -244,11 +258,13 @@ function messagesSSE(ip: string, sessionId: string): Response {
           const cacheKey = `${ip}::${sessionId}`;
           const cached = summaryCacheBySession[cacheKey];
           const nowTs = Date.now();
-          if (cached && cached.messageCount === totalCount && (nowTs - cached.cachedAt) < 5000) {
+          const recentForHash = messages.slice(-3);
+          const recentHash = hashRecentMessages(recentForHash);
+          if (cached && cached.messageHash === recentHash && (nowTs - cached.cachedAt) < 5000) {
             summaryText = cached.summary;
           } else {
             // If a fetch is already in-flight, show placeholder; else start async fetch without awaiting.
-            summaryText = (!cached || cached.messageCount !== totalCount) ? '...' : cached.summary;
+            summaryText = (!cached || cached.messageHash !== recentHash) ? '...' : cached.summary;
             if (!inFlightSummary[cacheKey]) {
               inFlightSummary[cacheKey] = true;
               (async () => {
@@ -259,10 +275,10 @@ function messagesSSE(ip: string, sessionId: string): Response {
                   const recents = recent.map((m: any) => ({ role: m.role || 'message', text: (m.parts?.[0]?.text || m.text || '').replace(/\s+/g,' ').trim() }));
                   const summ = await summarizeMessages(remoteBase, recents);
                   if (summ.ok) {
-                    summaryCacheBySession[cacheKey] = { messageCount: totalCount, summary: summ.summary || '(empty summary)', action: summ.action, cachedAt: Date.now() };
+                    summaryCacheBySession[cacheKey] = { messageHash: recentHash, summary: summ.summary || '(empty summary)', action: summ.action, cachedAt: Date.now() };
                   } else {
                     // Cache negative result briefly to avoid hammering
-                    summaryCacheBySession[cacheKey] = { messageCount: totalCount, summary: '(summary failed)', action: false, cachedAt: Date.now() };
+                    summaryCacheBySession[cacheKey] = { messageHash: recentHash, summary: '(summary failed)', action: false, cachedAt: Date.now() };
                   }
                 } catch (e) {
                   console.error('Summarizer summary error', (e as Error).message);
