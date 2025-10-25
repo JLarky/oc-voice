@@ -85,6 +85,7 @@ const inFlightFirstMessage: Record<string, boolean> = {};
 
 // Escape HTML
 import { escapeHtml, sendDatastarPatchElements, renderSessionDetailPage, renderSessionsListPage } from './render';
+import { renderSessionsUl, renderIpsUl, renderMessageItems } from './render-helpers';
 
 // Fetch sessions fresh for an IP (no cache usage, but populates cache for quick create-session reflection)
 async function fetchSessionsFresh(ip: string) {
@@ -138,23 +139,7 @@ function sessionsSSE(ip: string): Response {
       async function push() {
         try {
           const list = await fetchSessionsFresh(ip);
-          const sessionItems = list.length
-            ? list
-                .map(
-                  (s) =>
-                    `<li><a href="/sessions/${escapeHtml(ip)}/${escapeHtml(
-                      s.id
-                    )}"><span class="id">${escapeHtml(
-                      s.id
-                    )}</span></a> - ${escapeHtml(
-                      s.title || "(no title)"
-                    )} <button style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px" data-on:click="@post('/sessions/${escapeHtml(
-                      ip
-                    )}/${escapeHtml(s.id)}/delete-session')">✕</button></li>`
-                )
-                .join("")
-            : '<li class="empty">(no sessions)</li>';
-          const html = `<ul id="sessions-ul">${sessionItems}</ul>`;
+          const html = renderSessionsUl(ip, list);
           const statusHtml = `<div id="sessions-status" class="status">Updated ${new Date().toLocaleTimeString()}</div>`;
           try {
             controller.enqueue(
@@ -219,15 +204,7 @@ function messagesSSE(ip: string, sessionId: string): Response {
           const messages = await fetchMessages(ip, sessionId);
           const displayMessages =
             messages.length > 10 ? messages.slice(-10) : messages;
-          const messageItems = displayMessages.length
-            ? displayMessages
-                .map((m: any) => {
-                  const role = escapeHtml(m.role || "message");
-                  const text = escapeHtml(m.parts?.[0]?.text || m.text || "");
-                  return `<div class="message"><div class="message-role">${role}</div><div class="message-text">${text}</div></div>`;
-                })
-                .join("")
-            : '<div class="empty">(no messages)</div>';
+          const messageItems = renderMessageItems(displayMessages as any);
           // Build or reuse summarizer-based summary using dedicated summarizer session (non-blocking)
           let summaryText = "(no recent messages)";
           const skipSummary = messages.length === 0;
@@ -390,21 +367,7 @@ function ipsSSE(): Response {
     async start(controller) {
       function build() {
         try {
-          const ipItems = ipStore.length
-            ? ipStore
-                .map(
-                  (ip) =>
-                    `<li><a href="/sessions/${escapeHtml(
-                      ip
-                    )}"><span class="ip">${escapeHtml(
-                      ip
-                    )}</span></a> <button data-on:click=\"@post('/ips/remove/${escapeHtml(
-                      ip
-                    )}')\" class=\"remove-btn\">✕</button></li>`
-                )
-                .join("")
-            : '<li class="empty">(no addresses)</li>';
-          const html = `<ul id="ips-ul">${ipItems}</ul>`;
+          const html = renderIpsUl(ipStore);
           const statusHtml = `<div id="ips-status" class="status">Updated ${new Date().toLocaleTimeString()}</div>`;
           try {
             controller.enqueue(
@@ -473,21 +436,7 @@ const server = Bun.serve({
         const resultHtml = `<div id=\"add-ip-result\" class=\"result\">${
           ok ? "Added IP: " + escapeHtml(ip) : "Invalid or duplicate IP"
         }</div>`;
-        const ipItems = ipStore.length
-          ? ipStore
-              .map(
-                (v) =>
-                  `<li><a href=\"/sessions/${escapeHtml(
-                    v
-                  )}\"><span class=\"ip\">${escapeHtml(
-                    v
-                  )}</span></a> <button data-on:click=\"@post('/ips/remove/${escapeHtml(
-                    v
-                  )}')\" class=\"remove-btn\">✕</button></li>`
-              )
-              .join("")
-          : '<li class="empty">(no addresses)</li>';
-        const listHtml = `<ul id=\"ips-ul\">${ipItems}</ul>`;
+        const listHtml = renderIpsUl(ipStore);
         const stream =
           sendDatastarPatchElements(resultHtml) +
           sendDatastarPatchElements(listHtml);
@@ -541,21 +490,7 @@ const server = Bun.serve({
             ? "IP not found"
             : "No IP provided"
         }</div>`;
-        const ipItems = ipStore.length
-          ? ipStore
-              .map(
-                (v) =>
-                  `<li><a href=\"/sessions/${escapeHtml(
-                    v
-                  )}\"><span class=\"ip\">${escapeHtml(
-                    v
-                  )}</span></a> <button data-on:click=\"@post('/ips/remove/${escapeHtml(
-                    v
-                  )}')\" class=\"remove-btn\">✕</button></li>`
-              )
-              .join("")
-          : '<li class="empty">(no addresses)</li>';
-        const listHtml = `<ul id=\"ips-ul\">${ipItems}</ul>`;
+        const listHtml = renderIpsUl(ipStore);
         const stream =
           sendDatastarPatchElements(resultHtml) +
           sendDatastarPatchElements(listHtml);
@@ -584,21 +519,7 @@ const server = Bun.serve({
         const resultHtml = `<div id=\"add-ip-result\" class=\"result\">${
           ok ? "Removed IP: " + escapeHtml(ip) : "IP not found"
         }</div>`;
-        const ipItems = ipStore.length
-          ? ipStore
-              .map(
-                (v) =>
-                  `<li><a href=\"/sessions/${escapeHtml(
-                    v
-                  )}\"><span class=\"ip\">${escapeHtml(
-                    v
-                  )}</span></a> <button data-on:click=\"@post('/ips/remove/${escapeHtml(
-                    v
-                  )}')\" class=\"remove-btn\">✕</button></li>`
-              )
-              .join("")
-          : '<li class="empty">(no addresses)</li>';
-        const listHtml = `<ul id=\"ips-ul\">${ipItems}</ul>`;
+        const listHtml = renderIpsUl(ipStore);
         const stream =
           sendDatastarPatchElements(resultHtml) +
           sendDatastarPatchElements(listHtml);
@@ -765,23 +686,7 @@ const server = Bun.serve({
         await fetchSessionsFresh(ip).catch(() => null);
         const cache = cachedSessionsByIp[ip];
         const list = cache?.list || [];
-        const sessionItems = list.length
-          ? list
-              .map(
-                (s) =>
-                  `<li><a href="/sessions/${escapeHtml(ip)}/${escapeHtml(
-                    s.id
-                  )}"><span class="id">${escapeHtml(
-                    s.id
-                  )}</span></a> - ${escapeHtml(
-                    s.title || "(no title)"
-                  )} <button style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px" data-on:click="@post('/sessions/${escapeHtml(
-                    ip
-                  )}/${escapeHtml(s.id)}/delete-session')">✕</button></li>`
-              )
-              .join("")
-          : '<li class="empty">(no sessions)</li>';
-        const listHtml = `<ul id="sessions-ul">${sessionItems}</ul>`;
+        const listHtml = renderSessionsUl(ip, list);
         const resultHtml = `<div id="delete-session-result" class="result">${
           deletedOk
             ? "Deleted session: " + escapeHtml(sid)
@@ -864,23 +769,7 @@ const server = Bun.serve({
         await fetchSessionsFresh(ip).catch(() => null);
         const afterCache = cachedSessionsByIp[ip];
         const remainingList = afterCache?.list || [];
-        const sessionItems = remainingList.length
-          ? remainingList
-              .map(
-                (s) =>
-                  `<li><a href="/sessions/${escapeHtml(ip)}/${escapeHtml(
-                    s.id
-                  )}"><span class="id">${escapeHtml(
-                    s.id
-                  )}</span></a> - ${escapeHtml(
-                    s.title || "(no title)"
-                  )} <button style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px" data-on:click="@post('/sessions/${escapeHtml(
-                    ip
-                  )}/${escapeHtml(s.id)}/delete-session')">✕</button></li>`
-              )
-              .join("")
-          : '<li class="empty">(no sessions)</li>';
-        const listHtml = `<ul id="sessions-ul">${sessionItems}</ul>`;
+        const listHtml = renderSessionsUl(ip, remainingList);
         const resultHtml = `<div id="delete-session-result" class="result">Cleared sessions: ${deletedCount} / ${total}</div>`;
         const stream =
           sendDatastarPatchElements(resultHtml) +
