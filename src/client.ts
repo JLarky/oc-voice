@@ -55,6 +55,7 @@ liftHtml("speech-button", {
     const root = this as HTMLElement;
     let readBtn = root.querySelector("button");
     let playPause: HTMLButtonElement | null = null;
+    let testBtn: HTMLButtonElement | null = null;
     let isPlaying = true;
     const LS_KEY = "speechAutoPlay";
     try {
@@ -66,6 +67,7 @@ liftHtml("speech-button", {
     let currentUtter: SpeechSynthesisUtterance | null = null;
 
     if (!readBtn) {
+      // No markup supplied: create all three buttons.
       readBtn = document.createElement("button");
       readBtn.type = "button";
       readBtn.textContent = "Read Summary";
@@ -76,21 +78,35 @@ liftHtml("speech-button", {
       playPause.textContent = isPlaying ? "Pause" : "Play";
       playPause.style.marginTop = "1rem";
       playPause.style.marginLeft = "0.5rem";
-      playPause.addEventListener("click", () => {
-        isPlaying = !isPlaying;
-        playPause!.textContent = isPlaying ? "Pause" : "Play";
-        try {
-          localStorage.setItem(LS_KEY, String(isPlaying));
-        } catch {}
-        console.log("playPause toggle", { isPlaying });
-        if (isPlaying) triggerAutoSpeak();
-      });
       root.appendChild(playPause);
-      const testBtn = document.createElement("button");
+      testBtn = document.createElement("button");
       testBtn.type = "button";
       testBtn.textContent = "Test";
       testBtn.style.marginTop = "1rem";
       testBtn.style.marginLeft = "0.5rem";
+      root.appendChild(testBtn);
+    } else {
+      // Markup already contains buttons; wire them up.
+      const buttons = Array.from(root.querySelectorAll("button"));
+      // Prefer matching by text, fallback to order.
+      readBtn = buttons.find(b => /read summary/i.test(b.textContent || "")) || readBtn;
+      playPause = buttons.find(b => /(play|pause)/i.test(b.textContent || "")) || null;
+      testBtn = buttons.find(b => /test/i.test(b.textContent || "")) || null;
+      // Ensure playPause text reflects stored autoplay state.
+      if (playPause) playPause.textContent = isPlaying ? "Pause" : "Play";
+    }
+
+    // Attach listeners (creation and existing cases).
+    if (playPause) {
+      playPause.addEventListener("click", () => {
+        isPlaying = !isPlaying;
+        playPause!.textContent = isPlaying ? "Pause" : "Play";
+        try { localStorage.setItem(LS_KEY, String(isPlaying)); } catch {}
+        console.log("playPause toggle", { isPlaying });
+        if (isPlaying) triggerAutoSpeak();
+      });
+    }
+    if (testBtn) {
       testBtn.addEventListener("click", () => {
         // Try speech first
         try {
@@ -103,22 +119,17 @@ liftHtml("speech-button", {
         } catch {}
         // Fallback: short Web Audio beep
         try {
-          const ctx = new (window.AudioContext ||
-            (window as any).webkitAudioContext)();
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
           const osc = ctx.createOscillator();
           osc.type = "sine";
           osc.frequency.value = 660;
           osc.connect(ctx.destination);
           osc.start();
           setTimeout(() => {
-            try {
-              osc.stop();
-              ctx.close();
-            } catch {}
+            try { osc.stop(); ctx.close(); } catch {}
           }, 250);
         } catch {}
       });
-      root.appendChild(testBtn);
     }
 
     function extractSummary(): string {

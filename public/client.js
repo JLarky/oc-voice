@@ -106,6 +106,7 @@ liftHtml("speech-button", {
     const root = this;
     let readBtn = root.querySelector("button");
     let playPause = null;
+    let testBtn = null;
     let isPlaying = true;
     const LS_KEY = "speechAutoPlay";
     try {
@@ -127,6 +128,22 @@ liftHtml("speech-button", {
       playPause.textContent = isPlaying ? "Pause" : "Play";
       playPause.style.marginTop = "1rem";
       playPause.style.marginLeft = "0.5rem";
+      root.appendChild(playPause);
+      testBtn = document.createElement("button");
+      testBtn.type = "button";
+      testBtn.textContent = "Test";
+      testBtn.style.marginTop = "1rem";
+      testBtn.style.marginLeft = "0.5rem";
+      root.appendChild(testBtn);
+    } else {
+      const buttons = Array.from(root.querySelectorAll("button"));
+      readBtn = buttons.find((b) => /read summary/i.test(b.textContent || "")) || readBtn;
+      playPause = buttons.find((b) => /(play|pause)/i.test(b.textContent || "")) || null;
+      testBtn = buttons.find((b) => /test/i.test(b.textContent || "")) || null;
+      if (playPause)
+        playPause.textContent = isPlaying ? "Pause" : "Play";
+    }
+    if (playPause) {
       playPause.addEventListener("click", () => {
         isPlaying = !isPlaying;
         playPause.textContent = isPlaying ? "Pause" : "Play";
@@ -137,12 +154,8 @@ liftHtml("speech-button", {
         if (isPlaying)
           triggerAutoSpeak();
       });
-      root.appendChild(playPause);
-      const testBtn = document.createElement("button");
-      testBtn.type = "button";
-      testBtn.textContent = "Test";
-      testBtn.style.marginTop = "1rem";
-      testBtn.style.marginLeft = "0.5rem";
+    }
+    if (testBtn) {
       testBtn.addEventListener("click", () => {
         try {
           if ("speechSynthesis" in window) {
@@ -167,7 +180,6 @@ liftHtml("speech-button", {
           }, 250);
         } catch {}
       });
-      root.appendChild(testBtn);
     }
     function extractSummary() {
       const el = document.querySelector(".messages-summary");
