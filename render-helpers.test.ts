@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
-import { renderSessionsUl, renderIpsUl, renderMessageItems } from './render-helpers';
-import { escapeHtml } from './render';
+import { renderSessionsUl, renderIpsUl, renderMessageItems, escapeHtml } from './rendering';
+
 
 // Inline snapshot coverage focuses on complete HTML output
 // ensuring structure + escaping remain stable.

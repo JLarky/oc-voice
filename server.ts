@@ -84,8 +84,8 @@ const firstMessageSeen = new Set<string>();
 const inFlightFirstMessage: Record<string, boolean> = {};
 
 // Escape HTML
-import { escapeHtml, sendDatastarPatchElements, renderSessionDetailPage, renderSessionsListPage } from './render';
-import { renderSessionsUl, renderIpsUl, renderMessageItems } from './render-helpers';
+import { escapeHtml, sendDatastarPatchElements, renderSessionDetailPage, renderSessionsListPage } from './rendering';
+import { renderSessionsUl, renderIpsUl, renderMessageItems } from './rendering';
 
 // Fetch sessions fresh for an IP (no cache usage, but populates cache for quick create-session reflection)
 async function fetchSessionsFresh(ip: string) {
