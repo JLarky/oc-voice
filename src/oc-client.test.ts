@@ -75,4 +75,11 @@ describe('summarizeMessages', () => {
     expect(res.summary).toBe("can't summarize");
     expect(res.action).toBe(false);
   });
+
+  it('skips summarization when no messages', async () => {
+    const res = await summarizeMessages('http://127.0.0.1:2000', [], 'sess-any');
+    expect(res.ok).toBe(true);
+    expect(res.summary).toBe('(no messages)');
+    expect(res.action).toBe(false);
+  });
 });

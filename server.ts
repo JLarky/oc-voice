@@ -244,7 +244,8 @@ function messagesSSE(ip: string, sessionId: string): Response {
                 .join("")
             : '<div class="empty">(no messages)</div>';
           // Build or reuse summarizer-based summary using dedicated summarizer session (non-blocking)
-          let summaryText = '(no recent messages)';
+           let summaryText = '(no recent messages)';
+           const skipSummary = messages.length === 0;
           const totalCount = messages.length;
           const cacheKey = `${ip}::${sessionId}`;
 // Periodic prune
@@ -268,9 +269,9 @@ function messagesSSE(ip: string, sessionId: string): Response {
             if (reuse && cached) {
               summaryText = cached.summary;
               console.log('summary reuse', { cacheKey, hash: recentHash });
-            } else {
-              summaryText = '...';
-              if (!inFlightSummary[cacheKey]) {
+             } else {
+               summaryText = skipSummary ? '(no recent messages)' : '...';
+               if (!skipSummary && !inFlightSummary[cacheKey]) {
                 inFlightSummary[cacheKey] = true;
                 console.log('summary recompute start', { cacheKey, oldHash: cached?.messageHash, newHash: recentHash });
                 (async () => {
@@ -296,7 +297,7 @@ function messagesSSE(ip: string, sessionId: string): Response {
           const cacheAfter = summaryCacheBySession[cacheKey];
           const actionFlag = cacheAfter ? cacheAfter.action : /\|\s*action\s*=\s*yes/i.test(summaryText);
            const badge = actionFlag ? '<span style="background:#ffd54f;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">action</span>' : '<span style="background:#ccc;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">info</span>';
-           const html = `<div id=\"messages-list\">${messageItems}<div class=\"messages-summary\" style=\"opacity:.55;margin-top:4px\">summary: ${escapeHtml(summaryText)} ${badge}</div></div>`;
+           const html = totalCount === 0 ? `<div id=\"messages-list\">${messageItems}</div>` : `<div id=\"messages-list\">${messageItems}<div class=\"messages-summary\" style=\"opacity:.55;margin-top:4px\">summary: ${escapeHtml(summaryText)} ${badge}</div></div>`;
           const statusHtml = `<div id="messages-status" class="status">Updated ${new Date().toLocaleTimeString()}</div>`;
           try {
             controller.enqueue(

@@ -17,27 +17,120 @@ liftHtml("messages-wrapper", {
   },
 });
 
-// Static speech button component
-liftHtml("speech-button", {
-  init() {
+// Static speech button component (speaks latest summary + auto mode)
+liftHtml('speech-button', {
+  init(destroy) {
     const root = this as HTMLElement;
-    // Create button only once
-    let btn = root.querySelector("button");
-    if (!btn) {
-      btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = "Say Hello";
-      btn.style.marginTop = "1rem";
-      btn.addEventListener("click", () => {
-        if (!("speechSynthesis" in window)) {
-          console.warn("speechSynthesis unsupported");
-          return;
-        }
-        const utter = new SpeechSynthesisUtterance("Hello.");
-        try { speechSynthesis.cancel(); } catch {}
-        speechSynthesis.speak(utter);
+    let readBtn = root.querySelector('button');
+    let playPause: HTMLButtonElement | null = null;
+    let isPlaying = true;
+    let lastSpoken = '';
+    let pending: string | null = null;
+    let currentUtter: SpeechSynthesisUtterance | null = null;
+
+    if (!readBtn) {
+      readBtn = document.createElement('button');
+      readBtn.type = 'button';
+      readBtn.textContent = 'Read Summary';
+      readBtn.style.marginTop = '1rem';
+      root.appendChild(readBtn);
+      playPause = document.createElement('button');
+      playPause.type = 'button';
+      playPause.textContent = 'Pause';
+      playPause.style.marginTop = '1rem';
+      playPause.style.marginLeft = '0.5rem';
+      playPause.addEventListener('click', () => {
+        isPlaying = !isPlaying;
+        playPause!.textContent = isPlaying ? 'Pause' : 'Play';
+        console.log('playPause toggle', { isPlaying });
+        if (isPlaying) triggerAutoSpeak();
       });
-      root.appendChild(btn);
+      root.appendChild(playPause);
     }
-  },
+
+    function extractSummary(): string {
+      const el = document.querySelector('.messages-summary');
+      if (!el) return '';
+      let text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      text = text.replace(/^summary:\s*/i, '').replace(/\b(action|info)\s*$/i, '').trim();
+      return text;
+    }
+
+    function speak(summary: string) {
+      if (!('speechSynthesis' in window)) return;
+      if (!summary) return;
+      // Only speak latest; cancel previous and wait for end before next
+      try { speechSynthesis.cancel(); } catch {}
+      currentUtter = new SpeechSynthesisUtterance(summary);
+      lastSpoken = summary;
+      pending = null;
+      currentUtter.onend = () => {
+        currentUtter = null;
+        if (isPlaying && pending && pending !== lastSpoken) {
+          const p = pending;
+          pending = null;
+          speak(p);
+        }
+      };
+      speechSynthesis.speak(currentUtter);
+    }
+
+    function isPlaceholder(s: string): boolean {
+      return !s || s === '...' || /^(\(no recent messages\)|\(no messages\)|\(empty summary\)|\(summary failed\))$/i.test(s);
+    }
+    function considerAutoSpeak(summary: string) {
+      if (!isPlaying) return;
+      if (!summary || isPlaceholder(summary)) return;
+      if (currentUtter) {
+        if (summary !== lastSpoken && !isPlaceholder(summary)) pending = summary;
+        return;
+      }
+      if (summary === lastSpoken) return;
+      speak(summary);
+    }
+
+    function updateUIAndAuto() {
+      const s = extractSummary();
+      if (s) readBtn!.title = s;
+      considerAutoSpeak(s);
+    }
+
+    function triggerAutoSpeak() {
+      const s = extractSummary();
+      if (!s || s === lastSpoken) return;
+      if (isPlaceholder(s)) return;
+      if (!currentUtter) speak(s); else pending = s;
+    }
+
+    readBtn!.addEventListener('click', () => {
+      const s = extractSummary() || 'No summary yet.';
+      speak(s);
+    });
+
+    const list = document.getElementById('messages-list');
+    let obs: MutationObserver | null = null;
+    if (list) {
+      obs = new MutationObserver(() => updateUIAndAuto());
+      obs.observe(list, { childList: true, subtree: true });
+    }
+    const intervalId = setInterval(updateUIAndAuto, 3000);
+    // Capture initial summary to ignore once
+    const initialSummary = extractSummary();
+    let initialConsumed = false;
+    function updateUIAndAuto() {
+      const s = extractSummary();
+      if (s) readBtn!.title = s;
+      if (!initialConsumed) {
+        if (s !== initialSummary) initialConsumed = true; // changed -> future summaries allowed
+        return; // ignore first encountered
+      }
+      considerAutoSpeak(s);
+    }
+    updateUIAndAuto();
+    destroy(() => {
+      if (obs) obs.disconnect();
+      clearInterval(intervalId);
+      try { speechSynthesis.cancel(); } catch {}
+    });
+  }
 });

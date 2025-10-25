@@ -183,6 +183,9 @@ export async function ensureSummarizer(remoteHost: string, opts: EnsureSummarize
 // recentMessages: array of last messages with role + text
 // Returns summary line plus parsed action flag.
 export async function summarizeMessages(remoteHost: string, recentMessages: { role: string; text: string }[], targetSessionId?: string): Promise<{ summary: string; action: boolean; raw: string; ok: boolean; error?: string }> {
+  if (!Array.isArray(recentMessages) || recentMessages.length === 0) {
+    return { summary: '(no messages)', action: false, raw: '(no messages)', ok: true };
+  }
   const combined = recentMessages.map(m => `${m.role}: ${m.text.replace(/\s+/g,' ').trim()}`).join('\n');
   const prompt = 'Summarize the following conversation focusing on latest user intent in <=18 words. Append |action=yes if user requests guidance/help else |action=no. Output ONLY that line.';
   try {
