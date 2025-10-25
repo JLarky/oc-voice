@@ -248,7 +248,7 @@ function messagesSSE(ip: string, sessionId: string): Response {
             summaryText = cached.summary;
           } else {
             // If a fetch is already in-flight, show placeholder; else start async fetch without awaiting.
-            summaryText = cached ? cached.summary : '...';
+            summaryText = (!cached || cached.messageCount !== totalCount) ? '...' : cached.summary;
             if (!inFlightSummary[cacheKey]) {
               inFlightSummary[cacheKey] = true;
               (async () => {
