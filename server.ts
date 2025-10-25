@@ -51,10 +51,6 @@ async function persistIps() {
   }
 }
 await loadIps();
-const INITIAL_REMOTE_IP =
-  process.argv[2] || process.env.REMOTE_HOST_IP || "127.0.0.1";
-const seeded = addIp(INITIAL_REMOTE_IP);
-if (seeded) await persistIps();
 
 function resolveBaseUrl(ip: string) {
   return `http://${ip}:2000`;
@@ -147,7 +143,11 @@ function sessionsSSE(ip: string): Response {
                       s.id
                     )}"><span class="id">${escapeHtml(
                       s.id
-                    )}</span></a> - ${escapeHtml(s.title || "(no title)")} <button style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px" data-on:click="@post('/sessions/${escapeHtml(ip)}/${escapeHtml(s.id)}/delete-session')">✕</button></li>`
+                    )}</span></a> - ${escapeHtml(
+                      s.title || "(no title)"
+                    )} <button style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px" data-on:click="@post('/sessions/${escapeHtml(
+                      ip
+                    )}/${escapeHtml(s.id)}/delete-session')">✕</button></li>`
                 )
                 .join("")
             : '<li class="empty">(no sessions)</li>';
@@ -232,7 +232,12 @@ function messagesSSE(ip: string, sessionId: string): Response {
             controller.enqueue(
               new TextEncoder().encode(sendDatastarPatchElements(html))
             );
-            controller.enqueue(new TextEncoder().encode("event: datastar-script\n" + "data: script (function(){var el=document.getElementById('messages-list');if(!el) return;if(!el.__observerAdded){var obs=new MutationObserver(function(muts){var last=el.querySelector('.message:last-child');if(last&&last.scrollIntoView){last.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;});obs.observe(el,{childList:true,subtree:true});el.__observerAdded=true;}var lastMsg=el.querySelector('.message:last-child');if(lastMsg&&lastMsg.scrollIntoView){lastMsg.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;})();\n\n"));
+            controller.enqueue(
+              new TextEncoder().encode(
+                "event: datastar-script\n" +
+                  "data: script (function(){var el=document.getElementById('messages-list');if(!el) return;if(!el.__observerAdded){var obs=new MutationObserver(function(muts){var last=el.querySelector('.message:last-child');if(last&&last.scrollIntoView){last.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;});obs.observe(el,{childList:true,subtree:true});el.__observerAdded=true;}var lastMsg=el.querySelector('.message:last-child');if(lastMsg&&lastMsg.scrollIntoView){lastMsg.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;})();\n\n"
+              )
+            );
           } catch (e) {
             if (interval) clearInterval(interval);
             controller.close();
@@ -410,7 +415,11 @@ const server = Bun.serve({
         if (ok) await persistIps();
         console.log("Remove IP attempt", { raw: bodyText, parsedIp: ip, ok });
         const resultHtml = `<div id=\"add-ip-result\" class=\"result\">${
-          ok ? "Removed IP: " + escapeHtml(ip) : ip ? "IP not found" : "No IP provided"
+          ok
+            ? "Removed IP: " + escapeHtml(ip)
+            : ip
+            ? "IP not found"
+            : "No IP provided"
         }</div>`;
         const ipItems = ipStore.length
           ? ipStore
@@ -452,12 +461,20 @@ const server = Bun.serve({
         if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(ip)) ok = removeIp(ip);
         if (ok) await persistIps();
         console.log("Remove IP path attempt", { ip, ok });
-        const resultHtml = `<div id=\"add-ip-result\" class=\"result\">${ok ? "Removed IP: " + escapeHtml(ip) : "IP not found"}</div>`;
+        const resultHtml = `<div id=\"add-ip-result\" class=\"result\">${
+          ok ? "Removed IP: " + escapeHtml(ip) : "IP not found"
+        }</div>`;
         const ipItems = ipStore.length
           ? ipStore
               .map(
                 (v) =>
-                  `<li><a href=\"/sessions/${escapeHtml(v)}\"><span class=\"ip\">${escapeHtml(v)}</span></a> <button data-on:click=\"@post('/ips/remove/${escapeHtml(v)}')\" class=\"remove-btn\">✕</button></li>`
+                  `<li><a href=\"/sessions/${escapeHtml(
+                    v
+                  )}\"><span class=\"ip\">${escapeHtml(
+                    v
+                  )}</span></a> <button data-on:click=\"@post('/ips/remove/${escapeHtml(
+                    v
+                  )}')\" class=\"remove-btn\">✕</button></li>`
               )
               .join("")
           : '<li class="empty">(no addresses)</li>';
@@ -501,7 +518,7 @@ const server = Bun.serve({
           return new Response("Unknown IP", { status: 404 });
         try {
           const bodyText = await req.text();
-          let title = "calc-session";
+          let title = "new session";
           if (bodyText) {
             try {
               const parsed = JSON.parse(bodyText);
@@ -553,7 +570,11 @@ const server = Bun.serve({
           } else {
             cachedSessionsByIp[ip] = { list: [entry], fetchedAt: now };
           }
-          const html = `<div id="create-session-result" class="result" data-init="location.href='/sessions/${escapeHtml(ip)}/${escapeHtml(entry.id)}'">Created session: <a href="/sessions/${escapeHtml(
+          const html = `<div id="create-session-result" class="result" data-init="location.href='/sessions/${escapeHtml(
+            ip
+          )}/${escapeHtml(
+            entry.id
+          )}'">Created session: <a href="/sessions/${escapeHtml(
             ip
           )}/${escapeHtml(entry.id)}">${escapeHtml(entry.id)}</a></div>`;
           return new Response(sendDatastarPatchElements(html), {
@@ -590,7 +611,13 @@ const server = Bun.serve({
             const d = await (client as any).session.delete?.({
               params: { id: sid },
             });
-            if (d && (d.id === sid || (d as any).data?.id === sid || (d as any).ok || (d as any).status === "ok")) {
+            if (
+              d &&
+              (d.id === sid ||
+                (d as any).data?.id === sid ||
+                (d as any).ok ||
+                (d as any).status === "ok")
+            ) {
               deletedOk = true;
             }
           } catch (e) {
@@ -629,9 +656,7 @@ const server = Bun.serve({
                     s.title || "(no title)"
                   )} <button style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px" data-on:click="@post('/sessions/${escapeHtml(
                     ip
-                  )}/${escapeHtml(
-                    s.id
-                  )}/delete-session')">✕</button></li>`
+                  )}/${escapeHtml(s.id)}/delete-session')">✕</button></li>`
               )
               .join("")
           : '<li class="empty">(no sessions)</li>';
@@ -799,43 +824,50 @@ const server = Bun.serve({
         } catch {
           /* ignore */
         }
-        let sessionTitle = '';
-try {
-  const base = resolveBaseUrl(ip);
-  const cache = cachedSessionsByIp[ip];
-  if (cache && Array.isArray(cache.list)) {
-    const found = cache.list.find((s) => s.id === sid);
-    if (found && typeof found.title === 'string') sessionTitle = found.title.trim();
-  }
-  if (!sessionTitle) {
-    try {
-      const client2 = createOpencodeClient({ baseUrl: base });
-      const list2 = await client2.session.list().catch(() => []);
-      if (Array.isArray(list2)) {
-        const found2 = list2.find((s: any) => s && s.id === sid);
-        if (found2) {
-        const t = (found2 as any).title || (found2 as any).data?.title;
-        if (typeof t === 'string' && t.trim()) sessionTitle = t.trim();
-        }
-      }
-    } catch {}
-  }
-  if (!sessionTitle) {
-    try {
-      const rawRes2 = await fetch(`${base}/session/${sid}`);
-      if (rawRes2.ok) {
-        const rawJson2 = await rawRes2.json().catch(() => null);
-        if (rawJson2 && rawJson2.id === sid) {
-        const t = (rawJson2 as any).title || (rawJson2 as any).data?.title;
-        if (typeof t === 'string' && t.trim()) sessionTitle = t.trim();
-        }
-      }
-    } catch {}
-  }
-} catch {}
-const page = `<!doctype html><html lang="en"><head><meta charset="UTF-8"/><title>Session ${escapeHtml(
+        let sessionTitle = "";
+        try {
+          const base = resolveBaseUrl(ip);
+          const cache = cachedSessionsByIp[ip];
+          if (cache && Array.isArray(cache.list)) {
+            const found = cache.list.find((s) => s.id === sid);
+            if (found && typeof found.title === "string")
+              sessionTitle = found.title.trim();
+          }
+          if (!sessionTitle) {
+            try {
+              const client2 = createOpencodeClient({ baseUrl: base });
+              const list2 = await client2.session.list().catch(() => []);
+              if (Array.isArray(list2)) {
+                const found2 = list2.find((s: any) => s && s.id === sid);
+                if (found2) {
+                  const t =
+                    (found2 as any).title || (found2 as any).data?.title;
+                  if (typeof t === "string" && t.trim())
+                    sessionTitle = t.trim();
+                }
+              }
+            } catch {}
+          }
+          if (!sessionTitle) {
+            try {
+              const rawRes2 = await fetch(`${base}/session/${sid}`);
+              if (rawRes2.ok) {
+                const rawJson2 = await rawRes2.json().catch(() => null);
+                if (rawJson2 && rawJson2.id === sid) {
+                  const t =
+                    (rawJson2 as any).title || (rawJson2 as any).data?.title;
+                  if (typeof t === "string" && t.trim())
+                    sessionTitle = t.trim();
+                }
+              }
+            } catch {}
+          }
+        } catch {}
+        const page = `<!doctype html><html lang="en"><head><meta charset="UTF-8"/><title>Session ${escapeHtml(
           sessionTitle || sid
-        )}</title><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:900px;margin-left:auto;margin-right:auto;} a{color:#0366d6;} input,button{padding:.5rem;font-size:.95rem;border:1px solid #ccc;border-radius:3px;} button{background:#0366d6;color:white;cursor:pointer;border:none;} button:hover{background:#0256c7;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .status{font-size:.75rem;color:#666;margin-bottom:1rem;} .result{font-size:.75rem;color:#666;margin-top:.5rem;} #messages-list{border:1px solid #ddd;padding:1rem;border-radius:4px;margin-top:1rem;max-height:400px;overflow-y:auto;} .message{padding:.5rem;border-bottom:1px solid #eee;font-size:.9rem;} .message-role{font-weight:bold;color:#0366d6;} .message-text{margin-top:.25rem;white-space:pre-wrap;word-break:break-word;} .session-id{font-size:.6rem;color:#666;margin-top:.25rem;margin-bottom:1rem;} </style></head><body><h1>${escapeHtml(sessionTitle || sid)}</h1><div><a href="/sessions/${escapeHtml(
+        )}</title><meta name="viewport" content="width=device-width,initial-scale=1" /><style>body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:900px;margin-left:auto;margin-right:auto;} a{color:#0366d6;} input,button{padding:.5rem;font-size:.95rem;border:1px solid #ccc;border-radius:3px;} button{background:#0366d6;color:white;cursor:pointer;border:none;} button:hover{background:#0256c7;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .status{font-size:.75rem;color:#666;margin-bottom:1rem;} .result{font-size:.75rem;color:#666;margin-top:.5rem;} #messages-list{border:1px solid #ddd;padding:1rem;border-radius:4px;margin-top:1rem;max-height:400px;overflow-y:auto;} .message{padding:.5rem;border-bottom:1px solid #eee;font-size:.9rem;} .message-role{font-weight:bold;color:#0366d6;} .message-text{margin-top:.25rem;white-space:pre-wrap;word-break:break-word;} .session-id{font-size:.6rem;color:#666;margin-top:.25rem;margin-bottom:1rem;} </style></head><body><h1>${escapeHtml(
+          sessionTitle || sid
+        )}</h1><div><a href="/sessions/${escapeHtml(
           ip
         )}">&larr; Back to sessions for ${escapeHtml(
           ip
