@@ -4,7 +4,6 @@ import { render } from "preact-render-to-string";
 import {
   SessionsUl,
   IpsUl,
-  escapeHtml,
   renderSessionDetailPage,
   renderSessionsListPage,
 } from "./rendering";
@@ -76,9 +75,6 @@ describe("IpsUl component", () => {
   });
 });
 
-// renderMessageItems removed (messages now rendered via renderMessagesList with MessageItems)
-// Keeping tests focused on other helpers.
-
 describe("renderSessionDetailPage", () => {
   test("renders escaped title and key sections", () => {
     const html = renderSessionDetailPage({
@@ -110,14 +106,5 @@ describe("renderSessionsListPage", () => {
         '<!doctype html><html lang="en"><head><meta charset="UTF-8"/>',
       ),
     ).toBe(true);
-  });
-});
-
-describe("escapeHtml", () => {
-  test("escapes special characters", () => {
-    expect(escapeHtml('&<>"')).toBe("&amp;&lt;&gt;&quot;");
-  });
-  test("returns input when no specials", () => {
-    expect(escapeHtml("plain")).toBe("plain");
   });
 });

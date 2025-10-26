@@ -1,5 +1,4 @@
 // index.ts - aggregate rendering exports
-export { escapeHtml } from "./escape";
 // sendDatastarPatchElements removed (unused)
 export { renderSessionsListPage } from "./sessions-list";
 export { renderSessionDetailPage } from "./session-detail";

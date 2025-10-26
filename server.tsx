@@ -243,9 +243,8 @@ async function processMessageQueue() {
 // Periodic queue processor (every 1s) and immediate trigger on push
 setInterval(() => processMessageQueue(), 1000);
 
-// Escape HTML
+// Rendering helpers
 import {
-  escapeHtml,
   renderSessionDetailPage,
   renderSessionAdvancedPage,
   renderSessionsListPage,
@@ -508,14 +507,14 @@ const server = Bun.serve({
         const stream =
           dataStarPatchElementsString(
             <div id="add-ip-result" class="result">
-              {ok ? `Added IP: ${escapeHtml(ip)}` : "Invalid or duplicate IP"}
+              {ok ? `Added IP: ${ip}` : "Invalid or duplicate IP"}
             </div>,
           ) + dataStarPatchElementsString(<IpsUl ips={ipStore} />);
         return new Response(stream, {
           headers: { "Content-Type": "text/event-stream; charset=utf-8" },
         });
       } catch (e) {
-        const msg = escapeHtml((e as Error).message);
+        const msg = (e as Error).message;
         const errorResultJsx = (
           <div id="add-ip-result" class="result">
             Error: {msg}
@@ -705,7 +704,7 @@ const server = Bun.serve({
             headers: { "Content-Type": "text/event-stream; charset=utf-8" },
           });
         } catch (e) {
-          const msg = escapeHtml((e as Error).message);
+          const msg = (e as Error).message;
           const errorJsx = (
             <div id="create-session-result" class="result">
               Error: {msg}
@@ -1931,7 +1930,7 @@ const server = Bun.serve({
           });
         } catch (e) {
           console.error("Message route error", (e as Error).message);
-          const msg = escapeHtml((e as Error).message);
+          const msg = (e as Error).message;
           const errorJsx = (
             <div id="session-message-result" class="result">
               Error: {msg}
