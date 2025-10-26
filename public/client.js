@@ -156,152 +156,39 @@ liftHtml("speech-button", {
       });
     }
     if (testBtn) {
-      const waitForVoices = async () => {
-        let voices = speechSynthesis.getVoices();
-        if (voices.length)
-          return voices;
-        return new Promise((resolve) => {
-          const timer = setTimeout(() => resolve(speechSynthesis.getVoices()), 2000);
-          const handler = () => {
-            clearTimeout(timer);
-            speechSynthesis.removeEventListener("voiceschanged", handler);
-            resolve(speechSynthesis.getVoices());
-          };
-          speechSynthesis.addEventListener("voiceschanged", handler);
-        });
-      };
       const speakTest = async () => {
         if (!("speechSynthesis" in window)) {
-          window.alert("TTS not supported in this browser");
+          console.warn("[tts] speechSynthesis unavailable");
           return;
         }
         try {
           speechSynthesis.cancel();
         } catch {}
-        const voices = await waitForVoices();
-        const chosen = voices.find((v) => /en/i.test(v.lang)) || voices[0];
+        let voices = speechSynthesis.getVoices();
         if (!voices.length) {
-          window.alert("No voices available");
-          return;
+          voices = await new Promise((resolve) => {
+            const timer = setTimeout(() => resolve(speechSynthesis.getVoices()), 1000);
+            const handler = () => {
+              clearTimeout(timer);
+              speechSynthesis.removeEventListener("voiceschanged", handler);
+              resolve(speechSynthesis.getVoices());
+            };
+            speechSynthesis.addEventListener("voiceschanged", handler);
+          });
         }
         try {
-          const utter = new SpeechSynthesisUtterance("Speech synthesis test. If you hear this spoken clearly it works.");
+          const utter = new SpeechSynthesisUtterance("hi");
+          const chosen = voices.find((v) => /en/i.test(v.lang)) || voices[0];
           if (chosen)
             utter.voice = chosen;
-          utter.onstart = () => {
-            try {
-              window.alert("Speech start voice=" + (chosen?.name || "unknown"));
-            } catch {}
-          };
-          utter.onend = () => {
-            try {
-              window.alert("Speech ended");
-            } catch {}
-          };
-          utter.onerror = (e) => {
-            try {
-              window.alert("Speech error: " + (e.error || "unknown"));
-            } catch {}
-          };
+          utter.onerror = (e) => console.warn("[tts] error", e);
           speechSynthesis.speak(utter);
-          window.alert("Invoked speak voices=" + voices.length + " chosen=" + (chosen?.name || "none"));
         } catch (err) {
-          window.alert("Speak failed: " + (err instanceof Error ? err.message : String(err)));
+          console.warn("[tts] speak failed", err);
         }
       };
       testBtn.addEventListener("click", () => {
         speakTest();
-      });
-      const diagBtn = document.createElement("button");
-      diagBtn.type = "button";
-      diagBtn.textContent = "Diag TTS";
-      diagBtn.style.marginTop = "1rem";
-      diagBtn.style.marginLeft = "0.5rem";
-      testBtn.after(diagBtn);
-      diagBtn.addEventListener("click", async () => {
-        if (!("speechSynthesis" in window)) {
-          window.alert("TTS unsupported");
-          return;
-        }
-        const voicesInitial = speechSynthesis.getVoices();
-        const listStrInitial = voicesInitial.map((v) => v.name + "(" + v.lang + ")").join(", ") || "(none)";
-        try {
-          window.alert("Initial voices: " + listStrInitial);
-        } catch {}
-        const voices = await waitForVoices();
-        const listStr = voices.map((v) => v.name + "(" + v.lang + ")").join(", ") || "(none)";
-        try {
-          window.alert("Loaded voices: " + listStr);
-        } catch {}
-        if (!voices.length) {
-          window.alert("No voices loaded after wait");
-          return;
-        }
-        try {
-          speechSynthesis.cancel();
-        } catch {}
-        let attempt = 0;
-        let started = false;
-        const phrase = "Diagnostic speech synthesis phrase. You should hear this sentence clearly.";
-        const tryNext = () => {
-          if (started)
-            return;
-          if (attempt >= voices.length || attempt >= 5) {
-            setTimeout(() => {
-              if (started)
-                return;
-              try {
-                const Ctx = window.AudioContext || window.webkitAudioContext;
-                const ctx = new Ctx;
-                const osc = ctx.createOscillator();
-                osc.type = "sine";
-                osc.frequency.value = 440;
-                osc.connect(ctx.destination);
-                osc.start();
-                setTimeout(() => {
-                  try {
-                    osc.stop();
-                    ctx.close();
-                  } catch {}
-                }, 350);
-                window.alert("Fallback beep (speech did not start)");
-              } catch (err) {
-                window.alert("Fallback beep failed: " + (err instanceof Error ? err.message : String(err)));
-              }
-            }, 400);
-            return;
-          }
-          const voice = voices[attempt];
-          attempt++;
-          try {
-            speechSynthesis.cancel();
-          } catch {}
-          const utter = new SpeechSynthesisUtterance(phrase);
-          utter.voice = voice;
-          utter.onstart = () => {
-            started = true;
-            window.alert("Diag start voice=" + (voice?.name || "unknown"));
-          };
-          utter.onend = () => {
-            window.alert("Diag end");
-          };
-          utter.onerror = (e) => {
-            window.alert("Diag error voice=" + (voice?.name || "unknown") + " err=" + (e.error || "unknown"));
-            setTimeout(() => tryNext(), 100);
-          };
-          window.alert("Attempting voice #" + attempt + " " + (voice?.name || "unknown"));
-          try {
-            speechSynthesis.speak(utter);
-          } catch (err) {
-            window.alert("Speak threw for voice " + (voice?.name || "unknown") + ": " + (err instanceof Error ? err.message : String(err)));
-            setTimeout(() => tryNext(), 50);
-          }
-          setTimeout(() => {
-            if (!started)
-              tryNext();
-          }, 1200);
-        };
-        tryNext();
       });
     }
     function extractSummary() {
