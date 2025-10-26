@@ -2,7 +2,8 @@
 
 const port = 3001;
 
-import { rename } from "fs/promises";
+import { createStorage } from "unstorage";
+import fsDriver from "unstorage/drivers/fs";
 import { createOpencodeClient } from "@opencode-ai/sdk";
 import {
   listMessages,
@@ -27,31 +28,55 @@ function removeIp(ip: string) {
   return true;
 }
 const IP_STORE_FILE = "ip-store.json";
+// Unstorage-backed persistence (legacy file migration)
+const storage = createStorage({ driver: fsDriver({ base: "." }) });
 async function loadIps() {
+  try {
+    // Primary: read from storage key
+    const stored = await storage.getItem("ips");
+    if (Array.isArray(stored)) {
+      stored.forEach((v) => typeof v === "string" && addIp(v));
+      return;
+    } else if (typeof stored === "string") {
+      try {
+        const arr = JSON.parse(stored);
+        if (Array.isArray(arr))
+          arr.forEach((v) => typeof v === "string" && addIp(v));
+        return;
+      } catch {}
+    }
+  } catch (e) {
+    console.warn("storage read ips error", (e as Error).message);
+  }
+  // Legacy migration fallback
   try {
     const text = await Bun.file(IP_STORE_FILE).text();
     const arr = JSON.parse(text);
     if (Array.isArray(arr))
       arr.forEach((v) => typeof v === "string" && addIp(v));
+    // Persist migrated value to storage (best effort)
+    try {
+      await storage.setItem("ips", [...ipStore]);
+      console.log("Migrated legacy ip-store.json to unstorage");
+    } catch (e2) {
+      console.warn("migration write failed", (e2 as Error).message);
+    }
   } catch {
-    /* no existing file */
+    /* no existing legacy file */
   }
 }
 async function persistIps() {
   try {
-    const json = JSON.stringify(ipStore);
-    console.log("Persist write start", { count: ipStore.length });
-    await Bun.write(IP_STORE_FILE + ".tmp", json);
-    await rename(IP_STORE_FILE + ".tmp", IP_STORE_FILE);
-    console.log("Persist rename complete");
+    await storage.setItem("ips", [...ipStore]);
+    console.log("Persist ips stored", { count: ipStore.length });
   } catch (e) {
-    console.error("Persist IPs failed", (e as Error).message);
-    // Fallback direct write (non-atomic) so we at least have data
+    console.error("Persist ips storage failed", (e as Error).message);
+    // Fallback: direct legacy file write (non-atomic)
     try {
       await Bun.write(IP_STORE_FILE, JSON.stringify(ipStore));
-      console.log("Fallback direct write complete");
+      console.log("Fallback legacy file write complete");
     } catch (e2) {
-      console.error("Fallback persist failed", (e2 as Error).message);
+      console.error("Fallback legacy persist failed", (e2 as Error).message);
     }
   }
 }

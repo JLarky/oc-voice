@@ -30,7 +30,7 @@ const app = new Elysia()
           method: request.method,
           headers: request.headers,
           body,
-        }
+        },
       );
       const headers = new Headers();
       upstream.headers.forEach((v, k) => headers.set(k, v));
@@ -43,5 +43,5 @@ const app = new Elysia()
   .listen(3000);
 
 console.log(
-  "Elysia (proxy layer) started on http://localhost:" + app.server?.port
+  "Elysia (proxy layer) started on http://localhost:" + app.server?.port,
 );

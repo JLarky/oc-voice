@@ -12,7 +12,8 @@
     "@opencode-ai/sdk": "^0.15.16",
     "elysia": "^1.4.13",
     "preact": "^10.27.2",
-    "preact-render-to-string": "^6.6.3"
+    "preact-render-to-string": "^6.6.3",
+    "unstorage": "^1.17.1"
   },
   "devDependencies": {
     "@types/node": "^24.9.1",
