@@ -86,4 +86,44 @@ export function renderAutoScrollScriptEvent(): string {
     "data: script (function(){var el=document.getElementById('messages-list');if(!el) return;if(!el.__observerAdded){var obs=new MutationObserver(function(muts){var last=el.querySelector('.message:last-child');if(last&&last.scrollIntoView){last.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;});obs.observe(el,{childList:true,subtree:true});el.__observerAdded=true;}var lastMsg=el.querySelector('.message:last-child');if(lastMsg&&lastMsg.scrollIntoView){lastMsg.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;})();\n\n"
   );
 }
-export { MessagesList, AdvancedInfo, AdvancedSdkJson };
+// Advanced events fragment
+interface AdvancedEventsProps { events: string[]; attempts: any[]; stateJson?: string }
+function AdvancedEvents({ events, attempts, stateJson }: AdvancedEventsProps) {
+  // Render attempts summary and last ~30 events as individual textareas
+  const shown = events.slice(-30);
+  const attemptsSummary = attempts
+    .map(a => ({ url: a.url, ok: a.ok, error: a.error, closed: a.closed, events: a.events, durationMs: a.durationMs, notice: a.notice }))
+    .filter(a => a.url || a.notice);
+  return (
+    <div id='advanced-events'>
+      <div style='font-size:.75rem;opacity:.65;margin-bottom:4px'>attempts: {JSON.stringify(attemptsSummary)}</div>
+      <div style='display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto'>
+        {stateJson && (
+          <textarea
+            readOnly
+            rows={Math.min(12, Math.max(3, Math.ceil(stateJson.length / 90)))}
+            style='width:100%;font-family:monospace;font-size:.65rem;background:#1a1a1a;color:#cfe;border:1px solid #555;padding:4px'
+            class='advanced-event-state'
+          >
+            {stateJson}
+          </textarea>
+        )}
+        {shown.map((e, i) => {
+          const rows = Math.min(8, Math.max(2, Math.ceil(e.length / 80)));
+          return (
+            <textarea
+              key={i}
+              readOnly
+              rows={rows}
+              class='advanced-event-line'
+              style='width:100%;font-family:monospace;font-size:.65rem;background:#111;color:#eee;border:1px solid #333;padding:4px'
+            >
+              {e}
+            </textarea>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+export { MessagesList, AdvancedInfo, AdvancedSdkJson, AdvancedEvents };
