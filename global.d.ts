@@ -22,4 +22,7 @@ declare module "preact" {
   }
 }
 
+declare var test: (name: string, fn: () => any) => void;
+declare var expect: (actual: any) => any;
+
 export {};

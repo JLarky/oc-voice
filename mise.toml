@@ -2,7 +2,7 @@
 bun = "latest"
 
 [tasks.start]
-run = "docker run --rm -it -p 3000:3000 -v $PWD:/work -w /work -v ~/.colima-jail/mise:/mise -v ~/.colima-jail/root:/root jdxcode/mise:latest x -- bun dev $MISE_ARG_1"
+run = "docker run --rm -it -p 3000:3000 -p 3333:3333 -v $PWD:/work -w /work -v ~/.colima-jail/mise:/mise -v ~/.colima-jail/root:/root jdxcode/mise:latest x -- bun dev $MISE_ARG_1"
 
 [tasks.format]
 run = "bunx oxfmt@latest"

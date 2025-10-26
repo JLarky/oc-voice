@@ -4,6 +4,7 @@ import {
   createAdvancedStores,
   getAggregated,
   pruneSummaryCache,
+  pruneAggregatedState,
   AdvancedStores,
 } from "../../domain/advanced";
 import {
@@ -27,8 +28,11 @@ export function createAdvancedPlugin(
   injectedStores?: AdvancedStores,
 ) {
   const stores: AdvancedStores = injectedStores || createAdvancedStores();
-  // periodic prune
-  setInterval(() => pruneSummaryCache(stores), 30000);
+  // periodic prune of summary + aggregated state
+  setInterval(() => {
+    pruneSummaryCache(stores);
+    pruneAggregatedState(stores);
+  }, 30000);
   const resolveBase = (ip: string) => `http://${ip}:2000`;
   return (
     new Elysia({ name: "advanced" })

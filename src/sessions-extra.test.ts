@@ -1,9 +1,10 @@
+import { test, expect } from 'bun:test';
 import {
   deleteSession,
   shareSession,
   unshareSession,
   clearSessions,
-} from "../domain/sessions-extra";
+} from '../domain/sessions-extra';
 
 // Simple mock fetch responses sequence helper
 function mockFetch(map: Record<string, any>) {

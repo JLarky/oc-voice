@@ -1,5 +1,5 @@
 // ip-parity.test.ts - compares legacy server (3000) vs Elysia prototype (3333)
-import { expect, test } from "bun:test";
+import { test, expect } from 'bun:test';
 
 async function fetchJson(url: string) {
   const res = await fetch(url);

@@ -5,7 +5,8 @@
   "scripts": {
     "build": "bun build src/client.ts --outdir public",
     "dev": "bun run --watch server.tsx",
-    "watch": "bun build src/client.ts --outdir public --watch"
+    "watch": "bun build src/client.ts --outdir public --watch",
+    "dev-new": "bun run --watch app/elysia.ts"
   },
   "dependencies": {
     "@lift-html/core": "^0.0.4",

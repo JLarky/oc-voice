@@ -40,21 +40,24 @@ export const ipPlugin = (ipStore: string[]) => {
       // Parity SSE: status + ips list using legacy ids
       const stream = new ReadableStream({
         start(controller) {
+let interval: any;
           function push() {
             try {
               const status = `event: datastar-patch-elements\ndata: elements <div id=\"ips-status\" class=\"status\">Updated ${new Date().toLocaleTimeString()}<\\/div>\n\n`;
               let listHtml = '<ul id="ips-ul">';
               for (const ip of ipStore) listHtml += `<li>${ip}</li>`;
-              listHtml += "</ul>";
-              const ips = `event: datastar-patch-elements\ndata: elements <div id=\"ips-ul\">${listHtml}<\\/div>\n\n`;
+              listHtml += '</ul>';
+              // Patch the wrapper div id="ips-list" (legacy markup) instead of duplicating ips-ul id
+              const ips = `event: datastar-patch-elements\ndata: elements <div id=\"ips-list\">${listHtml}<\\/div>\n\n`;
               controller.enqueue(new TextEncoder().encode(status));
               controller.enqueue(new TextEncoder().encode(ips));
-            } catch {
-              controller.close();
+            } catch (e) {
+              clearInterval(interval);
+              try { controller.close(); } catch {}
             }
           }
           push();
-          const interval = setInterval(push, 5000);
+          interval = setInterval(push, 5000);
           (controller as any).interval = interval;
         },
         cancel() {

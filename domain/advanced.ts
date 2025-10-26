@@ -38,6 +38,7 @@ export const SUMMARY_CACHE_TTL_MS = 15 * 60 * 1000;
 export const SUMMARY_NEGATIVE_TTL_MS = 60 * 1000;
 export const SUMMARY_DEBOUNCE_MS = 2000;
 export const MESSAGE_COUNT_FRESH_MS = 5000;
+export const AGGREGATED_STATE_TTL_MS = 30 * 60 * 1000;
 
 export function createAdvancedStores(): AdvancedStores {
   return {
@@ -79,6 +80,16 @@ export function pruneSummaryCache(stores: AdvancedStores) {
         ? SUMMARY_NEGATIVE_TTL_MS
         : SUMMARY_CACHE_TTL_MS;
     if (now - entry.cachedAt > ttl) delete stores.summaryCacheBySession[key];
+  }
+}
+
+export function pruneAggregatedState(stores: AdvancedStores) {
+  const now = Date.now();
+  for (const [key, agg] of Object.entries(stores.aggregatedStateBySession)) {
+    const created = agg.meta?.createdAt || 0;
+    const lastEvent = agg.lastEventTs || created;
+    const age = now - Math.max(created, lastEvent);
+    if (age > AGGREGATED_STATE_TTL_MS) delete stores.aggregatedStateBySession[key];
   }
 }
 

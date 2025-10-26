@@ -1,5 +1,5 @@
 // sessions-parity.test.ts - compares legacy vs Elysia session list/create
-import { expect, test } from "bun:test";
+import { test, expect } from 'bun:test';
 
 async function postJson(url: string, body: any) {
   return fetch(url, {

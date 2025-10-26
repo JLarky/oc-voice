@@ -1,5 +1,5 @@
 // sessions-alias-parity.test.ts - verifies Elysia legacy alias endpoints exist
-import { expect, test } from "bun:test";
+import { test, expect } from 'bun:test';
 
 async function fetchJson(url: string, init?: RequestInit) {
   try {

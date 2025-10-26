@@ -7,11 +7,11 @@ Prepare codebase for incremental migration from monolithic `server.tsx` to modul
 - [x] Plan module extraction (this doc + detailed cut points)
 - [x] Extract IP routes to `ip.ts`
 - [x] Extract session CRUD to `sessions.ts`
-- [ ] Extract message queue logic to `queue.ts`
-- [ ] Extract advanced SSE logic to `advanced-events.ts`
+- [x] Extract message queue logic to `queue.ts`
+- [x] Extract advanced SSE logic to `advanced-events.ts`
 - [x] Add SDK normalization utilities (`sdk-normalize.ts` or within `oc-client.ts`)
-- [ ] Add cache pruning for `advancedAggregatedStateBySession`
-- [ ] Add integration tests for IP + session create/delete/share + advanced events first patch
+- [x] Add cache pruning for `advancedAggregatedStateBySession`
+- [ ] Add integration tests for IP + session create/delete/share + advanced events first patch (SSE fragments)
 - [x] Scaffold minimal Elysia app (`elysia-app.ts`) with one IP route
 
 ## Cut Points (Planned)
@@ -27,4 +27,4 @@ Prepare codebase for incremental migration from monolithic `server.tsx` to modul
 - Avoid framework-specific code until modules exist.
 - Integration tests will guard against regressions before Elysia introduction.
 
-_Last updated: Oct 26 2025 (Prototype modules + plugins scaffolded)_
+_Last updated: Oct 26 2025 (Advanced stores injected; queue & advanced SSE extracted)_
