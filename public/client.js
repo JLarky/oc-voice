@@ -157,58 +157,31 @@ liftHtml("speech-button", {
     }
     if (testBtn) {
       testBtn.addEventListener("click", () => {
-        const originalLabel = testBtn.textContent || "Test";
-        testBtn.disabled = true;
-        testBtn.textContent = "Speaking: hi";
-        const restore = () => {
-          testBtn && (testBtn.disabled = false, testBtn.textContent = originalLabel);
-          if (wasPlayingBefore && !isPlaying) {
-            isPlaying = true;
-            if (playPause)
-              playPause.textContent = "Pause";
-            triggerAutoSpeak();
-          }
-        };
-        const wasPlayingBefore = isPlaying;
-        if (isPlaying) {
-          isPlaying = false;
-          if (playPause)
-            playPause.textContent = "Play";
-        }
-        let spoke = false;
         try {
           if ("speechSynthesis" in window) {
-            try {
-              speechSynthesis.cancel();
-            } catch {}
-            const ensureVoices = () => {
+            const speakHi = () => {
+              const u = new SpeechSynthesisUtterance("hi");
               const voices = speechSynthesis.getVoices();
               const voice = voices.find((v) => /en/i.test(v.lang)) || voices[0];
-              const u = new SpeechSynthesisUtterance("hi");
               if (voice)
                 u.voice = voice;
               u.rate = 1;
               u.pitch = 1;
-              u.onend = () => {
-                spoke = true;
-                restore();
-              };
+              u.volume = 1;
               speechSynthesis.speak(u);
             };
             if (speechSynthesis.getVoices().length === 0) {
               const onVoices = () => {
                 speechSynthesis.removeEventListener("voiceschanged", onVoices);
-                ensureVoices();
+                speakHi();
               };
               speechSynthesis.addEventListener("voiceschanged", onVoices);
-              setTimeout(ensureVoices, 500);
+              setTimeout(() => {
+                speakHi();
+              }, 600);
             } else {
-              ensureVoices();
+              speakHi();
             }
-            setTimeout(() => {
-              if (!spoke)
-                restore();
-            }, 2000);
             return;
           }
         } catch {}
@@ -224,11 +197,8 @@ liftHtml("speech-button", {
               osc.stop();
               ctx.close();
             } catch {}
-            restore();
-          }, 300);
-        } catch {
-          restore();
-        }
+          }, 250);
+        } catch {}
       });
     }
     function extractSummary() {

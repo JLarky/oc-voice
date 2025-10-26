@@ -113,69 +113,37 @@ liftHtml("speech-button", {
     }
     if (testBtn) {
       testBtn.addEventListener("click", () => {
-        // Provide visible + audible confirmation; avoid summary race.
-        const originalLabel = testBtn!.textContent || "Test";
-        testBtn!.disabled = true;
-        testBtn!.textContent = "Speaking: hi";
-        const restore = () => {
-          testBtn && (testBtn.disabled = false, testBtn.textContent = originalLabel);
-          if (wasPlayingBefore && !isPlaying) {
-            // Autoplay was temporarily paused; restore.
-            isPlaying = true;
-            if (playPause) playPause.textContent = "Pause";
-            triggerAutoSpeak();
-          }
-        };
-        // Temporarily pause auto speak so 'hi' isn't overridden
-        const wasPlayingBefore = isPlaying;
-        if (isPlaying) {
-          isPlaying = false;
-          if (playPause) playPause.textContent = "Play"; // reflect paused state
-        }
-        let spoke = false;
+        // Simple TTS: speak 'hi' without changing button or autoplay state.
         try {
           if ("speechSynthesis" in window) {
-            try { speechSynthesis.cancel(); } catch {}
-            const ensureVoices = () => {
+            // Do not cancel currently speaking summary unless necessary.
+            // If a summary is mid-speech, queue 'hi' after it.
+            const speakHi = () => {
+              const u = new SpeechSynthesisUtterance("hi");
               const voices = speechSynthesis.getVoices();
               const voice = voices.find(v => /en/i.test(v.lang)) || voices[0];
-              const u = new SpeechSynthesisUtterance("hi");
               if (voice) u.voice = voice;
-              u.rate = 1;
-              u.pitch = 1;
-              u.onend = () => { spoke = true; restore(); };
+              u.rate = 1; u.pitch = 1; u.volume = 1;
               speechSynthesis.speak(u);
             };
+            // If voices not loaded yet, wait for them.
             if (speechSynthesis.getVoices().length === 0) {
-              const onVoices = () => {
-                speechSynthesis.removeEventListener('voiceschanged', onVoices as any);
-                ensureVoices();
-              };
+              const onVoices = () => { speechSynthesis.removeEventListener('voiceschanged', onVoices as any); speakHi(); };
               speechSynthesis.addEventListener('voiceschanged', onVoices as any);
-              setTimeout(ensureVoices, 500);
+              setTimeout(() => { speakHi(); }, 600); // fallback
             } else {
-              ensureVoices();
+              speakHi();
             }
-            // Fallback restore in case onend never fires
-            setTimeout(() => { if (!spoke) restore(); }, 2000);
             return;
           }
         } catch {}
-        // Fallback: short Web Audio beep
+        // Fallback: short beep if TTS unavailable.
         try {
-          const ctx = new (
-            window.AudioContext || (window as any).webkitAudioContext
-          )();
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
           const osc = ctx.createOscillator();
-          osc.type = "sine";
-          osc.frequency.value = 660;
-          osc.connect(ctx.destination);
-          osc.start();
-          setTimeout(() => {
-            try { osc.stop(); ctx.close(); } catch {}
-            restore();
-          }, 300);
-        } catch { restore(); }
+          osc.type = 'sine'; osc.frequency.value = 660; osc.connect(ctx.destination); osc.start();
+          setTimeout(() => { try { osc.stop(); ctx.close(); } catch {}; }, 250);
+        } catch {}
       });
     }
 
