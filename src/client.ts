@@ -112,35 +112,85 @@ liftHtml("speech-button", {
       });
     }
     if (testBtn) {
+      const waitForVoices = async (): Promise<SpeechSynthesisVoice[]> => {
+        let voices = speechSynthesis.getVoices();
+        if (voices.length) return voices;
+        return new Promise((resolve) => {
+          const timer = setTimeout(() => resolve(speechSynthesis.getVoices()), 1500);
+          const handler = () => {
+            clearTimeout(timer);
+            speechSynthesis.removeEventListener('voiceschanged', handler as any);
+            resolve(speechSynthesis.getVoices());
+          };
+          speechSynthesis.addEventListener('voiceschanged', handler as any);
+        });
+      };
       const speakTest = async () => {
         if (!('speechSynthesis' in window)) {
           console.warn('[tts] speechSynthesis unavailable');
           return;
         }
         try { speechSynthesis.cancel(); } catch {}
-        let voices = speechSynthesis.getVoices();
-        if (!voices.length) {
-          voices = await new Promise<SpeechSynthesisVoice[]>((resolve) => {
-            const timer = setTimeout(() => resolve(speechSynthesis.getVoices()), 1000);
-            const handler = () => {
-              clearTimeout(timer);
-              speechSynthesis.removeEventListener('voiceschanged', handler as any);
-              resolve(speechSynthesis.getVoices());
-            };
-            speechSynthesis.addEventListener('voiceschanged', handler as any);
-          });
-        }
+        const voices = await waitForVoices();
+        if (!voices.length) console.warn('[tts] no voices loaded');
+        const chosen = voices.find(v => /en/i.test(v.lang)) || voices[0];
         try {
           const utter = new SpeechSynthesisUtterance('hi');
-          const chosen = voices.find(v => /en/i.test(v.lang)) || voices[0];
           if (chosen) utter.voice = chosen;
+          utter.onstart = () => console.log('[tts] onstart', { voice: chosen?.name, lang: chosen?.lang });
+          utter.onend = () => console.log('[tts] onend');
           utter.onerror = (e) => console.warn('[tts] error', e);
           speechSynthesis.speak(utter);
+          console.log('[tts] speak invoked', { totalVoices: voices.length, chosen: chosen?.name });
         } catch (err) {
           console.warn('[tts] speak failed', err);
         }
       };
       testBtn.addEventListener('click', () => { speakTest(); });
+      // Diagnostic secondary button
+      const diagBtn = document.createElement('button');
+      diagBtn.type = 'button';
+      diagBtn.textContent = 'Diag TTS';
+      diagBtn.style.marginTop = '1rem';
+      diagBtn.style.marginLeft = '0.5rem';
+      testBtn.after(diagBtn);
+      diagBtn.addEventListener('click', async () => {
+        if (!('speechSynthesis' in window)) { console.warn('[tts:diag] speechSynthesis unavailable'); return; }
+        const voicesInitial = speechSynthesis.getVoices();
+        console.log('[tts:diag] initial voices', voicesInitial.map(v => ({ name: v.name, lang: v.lang, default: (v as any).default })));
+        const voices = await waitForVoices();
+        console.log('[tts:diag] awaited voices', voices.map(v => ({ name: v.name, lang: v.lang, default: (v as any).default })));
+        console.log('[tts:diag] interaction granted?', { hasClick: true });
+        try { speechSynthesis.cancel(); } catch {}
+        const utter = new SpeechSynthesisUtterance('diagnostic test of speech synthesis');
+        const chosen = voices.find(v => /en/i.test(v.lang)) || voices[0];
+        if (chosen) utter.voice = chosen;
+        utter.rate = 1; utter.pitch = 1; utter.volume = 1;
+        utter.onstart = () => console.log('[tts:diag] onstart');
+        utter.onend = () => console.log('[tts:diag] onend');
+        utter.onerror = (e) => console.warn('[tts:diag] onerror', e);
+        try {
+          speechSynthesis.speak(utter);
+          console.log('[tts:diag] speak invoked', { chosen: chosen?.name, voicesCount: voices.length });
+        } catch (err) {
+          console.warn('[tts:diag] speak threw', err);
+        }
+        // Fallback beep to test audio output path
+        setTimeout(() => {
+          if (speechSynthesis.speaking) return; // speech worked
+          try {
+            const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
+            const ctx = new Ctx();
+            const osc = ctx.createOscillator();
+            osc.type = 'sine'; osc.frequency.value = 440;
+            osc.connect(ctx.destination); osc.start();
+            setTimeout(() => { try { osc.stop(); ctx.close(); } catch {}; }, 300);
+            console.log('[tts:diag] fallback beep played');
+          } catch (err) {
+            console.warn('[tts:diag] fallback beep failed', err);
+          }
+        }, 1200);
+      });
     }
 
     function extractSummary(): string {
