@@ -89,6 +89,76 @@ const MESSAGE_COUNT_FRESH_MS = 5000;
 // Key: `${ip}::${sessionId}`
 const advancedAggregatedStateBySession: Record<string, any> = {};
 
+// Derive share URL for a session (best-effort; cached short TTL via advancedAggregatedState)
+function deriveShareUrlForSession(ip: string, sid: string): string | undefined {
+  try {
+    const aggKey = `${ip}::${sid}`;
+    const agg = advancedAggregatedStateBySession[aggKey];
+    if (agg && typeof agg.shareUrl === "string" && agg.shareUrl)
+      return agg.shareUrl;
+  } catch {}
+  const base = resolveBaseUrl(ip);
+  try {
+    // Fetch detail; SDK first then raw fallback
+    const client = createOpencodeClient({ baseUrl: base });
+    return Promise.resolve((client as any).session.get?.({ path: { id: sid } }))
+      .then((d: any) => {
+        console.log("deriveShareUrlForSession sdk.get raw", {
+          ip,
+          sid,
+          keys: d && Object.keys(d || {}),
+          val: d,
+        });
+        const url =
+          d?.share?.url ||
+          d?.data?.share?.url ||
+          d?.share_url ||
+          d?.data?.share_url;
+        if (typeof url === "string" && url) {
+          try {
+            const aggKey = `${ip}::${sid}`;
+            const agg =
+              advancedAggregatedStateBySession[aggKey] ||
+              (advancedAggregatedStateBySession[aggKey] = {});
+            agg.shareUrl = url;
+          } catch {}
+          return url;
+        }
+        return undefined;
+      })
+      .catch(() =>
+        fetch(`${base}/session/${sid}`)
+          .then((r) => (r.ok ? r.json().catch(() => null) : null))
+          .then((j: any) => {
+            console.log("deriveShareUrlForSession raw fetch detail", {
+              ip,
+              sid,
+              val: j,
+            });
+            const url =
+              j?.share?.url ||
+              j?.data?.share?.url ||
+              j?.share_url ||
+              j?.data?.share_url;
+            if (typeof url === "string" && url) {
+              try {
+                const aggKey = `${ip}::${sid}`;
+                const agg =
+                  advancedAggregatedStateBySession[aggKey] ||
+                  (advancedAggregatedStateBySession[aggKey] = {});
+                agg.shareUrl = url;
+              } catch {}
+              return url;
+            }
+            return undefined;
+          })
+          .catch(() => undefined),
+      ) as any;
+  } catch {
+    return undefined;
+  }
+}
+
 const firstMessageSeen = new Set<string>();
 const inFlightFirstMessage: Record<string, boolean> = {};
 
@@ -667,7 +737,7 @@ const server = Bun.serve({
           const client = createOpencodeClient({ baseUrl: base });
           try {
             const d = await (client as any).session.delete?.({
-              params: { id: sid },
+              path: { id: sid },
             });
             if (
               d &&
@@ -729,6 +799,142 @@ const server = Bun.serve({
         });
       }
     }
+    // Share session for IP: POST /sessions/:ip/:sid/share-session
+    if (
+      url.pathname.startsWith("/sessions/") &&
+      url.pathname.endsWith("/share-session") &&
+      req.method === "POST"
+    ) {
+      const parts = url.pathname.split("/").filter(Boolean); // ['sessions', ip, sid, 'share-session']
+      if (parts.length === 4 && parts[3] === "share-session") {
+        const ip = parts[1];
+        const sid = parts[2];
+        if (!ipStore.includes(ip))
+          return new Response("Unknown IP", { status: 404 });
+        let sharedOk = false;
+        const base = resolveBaseUrl(ip);
+        try {
+          const client = createOpencodeClient({ baseUrl: base });
+          try {
+            const d = await (client as any).session.share?.({
+              path: { id: sid },
+            });
+            if (
+              d &&
+              (d.id === sid ||
+                (d as any).data?.id === sid ||
+                (d as any).ok ||
+                (d as any).status === "ok")
+            ) {
+              sharedOk = true;
+            }
+          } catch (e) {
+            console.warn("SDK share failed", (e as Error).message);
+          }
+          if (!sharedOk) {
+            try {
+              const rawRes = await fetch(`${base}/session/${sid}/share`, {
+                method: "POST",
+              });
+              if (rawRes.ok) sharedOk = true;
+            } catch {}
+          }
+        } catch (e) {
+          console.error("Share session route error", (e as Error).message);
+        }
+        let shareUrl: string | undefined;
+        if (sharedOk) {
+          try {
+            const base = resolveBaseUrl(ip);
+            const detailRes = await fetch(`${base}/session/${sid}`);
+            if (detailRes.ok) {
+              const json = await detailRes.json().catch(() => null);
+              shareUrl =
+                json?.share?.url ||
+                json?.data?.share?.url ||
+                json?.share_url ||
+                json?.data?.share_url;
+              if (typeof shareUrl === "string" && shareUrl) {
+                try {
+                  const aggKey = `${ip}::${sid}`;
+                  const agg =
+                    advancedAggregatedStateBySession[aggKey] ||
+                    (advancedAggregatedStateBySession[aggKey] = {});
+                  agg.shareUrl = shareUrl;
+                } catch {}
+              }
+            }
+          } catch {}
+        }
+        const stream = dataStarPatchElementsString(
+          <div id="share-session-result" class="result">
+            {sharedOk
+              ? `Shared session: ${sid}${shareUrl ? " | " + shareUrl : ""}`
+              : "Share failed or session not found"}
+          </div>,
+        );
+        return new Response(stream, {
+          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+          status: sharedOk ? 200 : 500,
+        });
+      }
+    }
+    // Unshare session for IP: POST /sessions/:ip/:sid/unshare-session
+    if (
+      url.pathname.startsWith("/sessions/") &&
+      url.pathname.endsWith("/unshare-session") &&
+      req.method === "POST"
+    ) {
+      const parts = url.pathname.split("/").filter(Boolean); // ['sessions', ip, sid, 'unshare-session']
+      if (parts.length === 4 && parts[3] === "unshare-session") {
+        const ip = parts[1];
+        const sid = parts[2];
+        if (!ipStore.includes(ip))
+          return new Response("Unknown IP", { status: 404 });
+        let unsharedOk = false;
+        const base = resolveBaseUrl(ip);
+        try {
+          const client = createOpencodeClient({ baseUrl: base });
+          try {
+            const d = await (client as any).session.unshare?.({
+              path: { id: sid },
+            });
+            if (
+              d &&
+              (d.id === sid ||
+                (d as any).data?.id === sid ||
+                (d as any).ok ||
+                (d as any).status === "ok")
+            ) {
+              unsharedOk = true;
+            }
+          } catch (e) {
+            console.warn("SDK unshare failed", (e as Error).message);
+          }
+          if (!unsharedOk) {
+            try {
+              const rawRes = await fetch(`${base}/session/${sid}/unshare`, {
+                method: "POST",
+              });
+              if (rawRes.ok) unsharedOk = true;
+            } catch {}
+          }
+        } catch (e) {
+          console.error("Unshare session route error", (e as Error).message);
+        }
+        const stream = dataStarPatchElementsString(
+          <div id="share-session-result" class="result">
+            {unsharedOk
+              ? `Unshared session: ${sid}`
+              : "Unshare failed or session not found"}
+          </div>,
+        );
+        return new Response(stream, {
+          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+          status: unsharedOk ? 200 : 500,
+        });
+      }
+    }
     // Clear all sessions for IP: POST /sessions/:ip/clear-sessions
     if (
       url.pathname.startsWith("/sessions/") &&
@@ -756,7 +962,7 @@ const server = Bun.serve({
               const client = createOpencodeClient({ baseUrl: base });
               try {
                 const d = await (client as any).session.delete?.({
-                  params: { id: sid },
+                  path: { id: sid },
                 });
                 if (
                   d &&
@@ -869,7 +1075,7 @@ const server = Bun.serve({
             }
           }
           await tryGet("params.id", () =>
-            (client as any).session.get?.({ params: { id: sid } }),
+            (client as any).session.get?.({ path: { id: sid } }),
           );
           if (!sdkDetail)
             await tryGet("params.session_id", () =>
@@ -1545,10 +1751,12 @@ const server = Bun.serve({
                     {`Updated ${new Date().toLocaleTimeString()}`}
                   </div>
                 );
+                const shareUrl = await deriveShareUrlForSession(ip, sid);
                 const infoWrapperJsx = (
                   <AdvancedInfo
                     title={displayTitle}
                     approxCount={approxCount}
+                    shareUrl={shareUrl}
                   />
                 );
                 controller.enqueue(
@@ -1813,7 +2021,7 @@ const server = Bun.serve({
           let exists = false;
           try {
             const detail = await (client as any).session.get?.({
-              params: { id: sid },
+              path: { id: sid },
             });
             if (detail && detail.id === sid) exists = true;
           } catch {

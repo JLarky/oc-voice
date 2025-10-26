@@ -35,11 +35,28 @@ function AdvancedSdkJson({ jsonText }: AdvancedSdkJsonProps) {
 interface AdvancedInfoProps {
   title: string;
   approxCount: number;
+  shareUrl?: string;
 }
-function AdvancedInfo({ title, approxCount }: AdvancedInfoProps) {
+function AdvancedInfo({
+  title,
+  approxCount,
+  shareUrl,
+}: AdvancedInfoProps & { shareUrl?: string }) {
+  const link = shareUrl ? (
+    <a
+      href={shareUrl}
+      target="_blank"
+      rel="noopener"
+      style="color:#2c3e50;text-decoration:underline"
+    >
+      {shareUrl}
+    </a>
+  ) : null;
   return (
     <div id="advanced-info">
       Title: {title} | messages: ~{approxCount}
+      {link ? " | shared: " : ""}
+      {link}
     </div>
   );
 }

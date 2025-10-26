@@ -36,11 +36,42 @@ export function SessionAdvancedPage(props: SessionAdvancedProps) {
         >
           Delete Session
         </button>
+        <button
+          style={{
+            background: "#3498db",
+            color: "#fff",
+            marginRight: ".5rem",
+            padding: ".25rem .5rem",
+            fontSize: ".7rem",
+            border: "none",
+            borderRadius: "3px",
+            cursor: "pointer",
+          }}
+          data-on:click={`@post('/sessions/${props.ip}/${props.sessionId}/share-session')`}
+        >
+          Share Session
+        </button>
+        <button
+          style={{
+            background: "#95a5a6",
+            color: "#fff",
+            marginRight: ".5rem",
+            padding: ".25rem .5rem",
+            fontSize: ".7rem",
+            border: "none",
+            borderRadius: "3px",
+            cursor: "pointer",
+          }}
+          data-on:click={`@post('/sessions/${props.ip}/${props.sessionId}/unshare-session')`}
+        >
+          Unshare Session
+        </button>
         <span style={{ fontSize: ".7rem", color: "#555" }}>
           (redirects to list on success)
         </span>
       </div>
       <div id="delete-session-result" className="result" />
+      <div id="share-session-result" className="result" />
       <div id="advanced-status" className="status">
         Connecting...
       </div>
