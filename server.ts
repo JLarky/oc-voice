@@ -88,17 +88,34 @@ import {
   escapeHtml,
   sendDatastarPatchElements,
   renderSessionDetailPage,
+  renderSessionAdvancedPage,
   renderSessionsListPage,
 } from "./rendering";
-import { renderStatusDiv, renderResultDiv, renderSessionCreateResult, renderSessionDeleteResult, renderSessionsClearedResult, renderMessageReplyResult, renderMessageErrorResult, renderNoTextResult, renderMessagesList, renderAutoScrollScriptEvent } from './rendering/fragments';
+import {
+  renderStatusDiv,
+  renderResultDiv,
+  renderSessionCreateResult,
+  renderSessionDeleteResult,
+  renderSessionsClearedResult,
+  renderMessageReplyResult,
+  renderMessageErrorResult,
+  renderNoTextResult,
+  renderMessagesList,
+  renderAutoScrollScriptEvent,
+  renderAdvancedSdkJson,
+  renderAdvancedInfo,
+} from "./rendering/fragments";
 import { renderSessionsUl, renderIpsUl } from "./rendering";
 
 // Read persisted summarizer session id (if any) for highlighting; returns string or undefined
 async function readSummarizerId(): Promise<string | undefined> {
   try {
-    const text = await Bun.file('playpen/summarizer-config.json').text();
+    const text = await Bun.file("playpen/summarizer-config.json").text();
     const data = JSON.parse(text);
-    const id = data && typeof data.summarizerSessionId === 'string' ? data.summarizerSessionId : undefined;
+    const id =
+      data && typeof data.summarizerSessionId === "string"
+        ? data.summarizerSessionId
+        : undefined;
     return id;
   } catch {
     return undefined;
@@ -183,13 +200,16 @@ function sessionsSSE(ip: string): Response {
         try {
           const list = await fetchSessionsFresh(ip);
           const html = renderSessionsUl(ip, list, await readSummarizerId());
-          const statusHtml = renderStatusDiv('sessions-status', `Updated ${new Date().toLocaleTimeString()}`);
+          const statusHtml = renderStatusDiv(
+            "sessions-status",
+            `Updated ${new Date().toLocaleTimeString()}`
+          );
           try {
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(statusHtml)),
+              new TextEncoder().encode(sendDatastarPatchElements(statusHtml))
             );
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(html)),
+              new TextEncoder().encode(sendDatastarPatchElements(html))
             );
           } catch (e) {
             if (interval) clearInterval(interval);
@@ -231,7 +251,7 @@ async function fetchMessages(ip: string, sessionId: string) {
       "Failed to fetch messages",
       ip,
       sessionId,
-      (e as Error).message,
+      (e as Error).message
     );
     return [];
   }
@@ -282,7 +302,7 @@ function messagesSSE(ip: string, sessionId: string): Response {
           }));
           const { hash: recentHash, reuse } = shouldReuseSummary(
             cached?.messageHash,
-            recentForHash,
+            recentForHash
           );
           if (reuse && cached) {
             summaryText = cached.summary;
@@ -315,7 +335,7 @@ function messagesSSE(ip: string, sessionId: string): Response {
                     const summ = await summarizeMessages(
                       remoteBase,
                       recentForHash,
-                      sessionId,
+                      sessionId
                     );
                     if (summ.ok) {
                       summaryCacheBySession[cacheKey] = {
@@ -343,7 +363,7 @@ function messagesSSE(ip: string, sessionId: string): Response {
                   } catch (e) {
                     console.error(
                       "Summarizer summary error",
-                      (e as Error).message,
+                      (e as Error).message
                     );
                   } finally {
                     delete inFlightSummary[cacheKey];
@@ -356,19 +376,25 @@ function messagesSSE(ip: string, sessionId: string): Response {
           const actionFlag = cacheAfter
             ? cacheAfter.action
             : /\|\s*action\s*=\s*yes/i.test(summaryText);
-          const html = renderMessagesList(messageItems as any, summaryText, actionFlag, totalCount);
-          const statusHtml = renderStatusDiv('messages-status', `Updated ${new Date().toLocaleTimeString()}`);
+          const html = renderMessagesList(
+            messageItems as any,
+            summaryText,
+            actionFlag,
+            totalCount
+          );
+          const statusHtml = renderStatusDiv(
+            "messages-status",
+            `Updated ${new Date().toLocaleTimeString()}`
+          );
           try {
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(statusHtml)),
+              new TextEncoder().encode(sendDatastarPatchElements(statusHtml))
             );
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(html)),
+              new TextEncoder().encode(sendDatastarPatchElements(html))
             );
             controller.enqueue(
-              new TextEncoder().encode(
-                renderAutoScrollScriptEvent(),
-              ),
+              new TextEncoder().encode(renderAutoScrollScriptEvent())
             );
           } catch (e) {
             if (interval) clearInterval(interval);
@@ -403,13 +429,16 @@ function ipsSSE(): Response {
       function build() {
         try {
           const html = renderIpsUl(ipStore);
-          const statusHtml = renderStatusDiv('ips-status', `Updated ${new Date().toLocaleTimeString()}`);
+          const statusHtml = renderStatusDiv(
+            "ips-status",
+            `Updated ${new Date().toLocaleTimeString()}`
+          );
           try {
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(statusHtml)),
+              new TextEncoder().encode(sendDatastarPatchElements(statusHtml))
             );
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(html)),
+              new TextEncoder().encode(sendDatastarPatchElements(html))
             );
           } catch (e) {
             if (interval) clearInterval(interval);
@@ -468,7 +497,10 @@ const server = Bun.serve({
         if (ip) ok = addIp(ip);
         if (ok) await persistIps();
         console.log("Add IP attempt", { raw: bodyText, parsedIp: ip, ok });
-        const resultHtml = renderResultDiv('add-ip-result', ok ? `Added IP: ${escapeHtml(ip)}` : 'Invalid or duplicate IP');
+        const resultHtml = renderResultDiv(
+          "add-ip-result",
+          ok ? `Added IP: ${escapeHtml(ip)}` : "Invalid or duplicate IP"
+        );
         const listHtml = renderIpsUl(ipStore);
         const stream =
           sendDatastarPatchElements(resultHtml) +
@@ -520,8 +552,8 @@ const server = Bun.serve({
           ok
             ? "Removed IP: " + escapeHtml(ip)
             : ip
-              ? "IP not found"
-              : "No IP provided"
+            ? "IP not found"
+            : "No IP provided"
         }</div>`;
         const listHtml = renderIpsUl(ipStore);
         const stream =
@@ -611,7 +643,7 @@ const server = Bun.serve({
           } catch (e) {
             console.warn(
               "SDK create failed, trying raw endpoint:",
-              (e as Error).message,
+              (e as Error).message
             );
             const rawRes = await fetch(`${base}/session`, {
               method: "POST",
@@ -628,7 +660,7 @@ const server = Bun.serve({
           }
           if (!sessionId || typeof sessionId !== "string")
             throw new Error(
-              `Session creation returned invalid ID: ${JSON.stringify(created)}`,
+              `Session creation returned invalid ID: ${JSON.stringify(created)}`
             );
           // Inject into per-IP cache
           const entry = {
@@ -651,7 +683,10 @@ const server = Bun.serve({
           });
         } catch (e) {
           const msg = escapeHtml((e as Error).message);
-          const html = renderResultDiv('create-session-result', `Error: ${msg}`);
+          const html = renderResultDiv(
+            "create-session-result",
+            `Error: ${msg}`
+          );
           return new Response(sendDatastarPatchElements(html), {
             headers: { "Content-Type": "text/event-stream; charset=utf-8" },
             status: 500,
@@ -777,7 +812,7 @@ const server = Bun.serve({
               console.error(
                 "Bulk delete session error",
                 sid,
-                (e as Error).message,
+                (e as Error).message
               );
             }
             if (deletedOk) deletedCount++;
@@ -792,7 +827,11 @@ const server = Bun.serve({
         await fetchSessionsFresh(ip).catch(() => null);
         const afterCache = cachedSessionsByIp[ip];
         const remainingList = afterCache?.list || [];
-        const listHtml = renderSessionsUl(ip, remainingList, await readSummarizerId());
+        const listHtml = renderSessionsUl(
+          ip,
+          remainingList,
+          await readSummarizerId()
+        );
         const resultHtml = renderSessionsClearedResult(deletedCount, total);
         const stream =
           sendDatastarPatchElements(resultHtml) +
@@ -819,6 +858,188 @@ const server = Bun.serve({
         if (!ipStore.includes(ip))
           return new Response("Unknown IP", { status: 404 });
         return messagesSSE(ip, sid);
+      }
+    }
+
+    // Advanced raw JSON endpoint removed (manual fetch disabled)
+
+    // Advanced SDK JSON: GET /sessions/:ip/:sid/advanced/sdk-json
+    if (
+      url.pathname.startsWith("/sessions/") &&
+      url.pathname.endsWith("/advanced/sdk-json") &&
+      req.method === "GET"
+    ) {
+      const parts = url.pathname.split("/").filter(Boolean); // ['sessions', ip, sid, 'advanced','sdk-json']
+      if (
+        parts.length === 5 &&
+        parts[3] === "advanced" &&
+        parts[4] === "sdk-json"
+      ) {
+        const ip = parts[1];
+        const sid = parts[2];
+        if (!ipStore.includes(ip))
+          return new Response("Unknown IP", { status: 404 });
+        const base = resolveBaseUrl(ip);
+        let sdkDetail: any = null;
+        let sdkList: any = null;
+        let rawDetail: any = null;
+        const attempts: any[] = [];
+        try {
+          const client = createOpencodeClient({ baseUrl: base });
+          // Attempt multiple shapes for session.get
+          async function tryGet(label: string, fn: () => Promise<any>) {
+            try {
+              const val = await fn();
+              if (val) {
+                const directId = (val as any).id;
+                const nestedId = (val as any).data?.id;
+                const okMatch = directId === sid || nestedId === sid;
+                attempts.push({
+                  label,
+                  ok: okMatch,
+                  keys: Object.keys(val || {}),
+                  directId,
+                  nestedId,
+                });
+                if (okMatch && !sdkDetail) sdkDetail = val;
+              } else {
+                attempts.push({ label, ok: false, value: val });
+              }
+            } catch (e) {
+              attempts.push({ label, ok: false, error: (e as Error).message });
+            }
+          }
+          await tryGet("params.id", () =>
+            (client as any).session.get?.({ params: { id: sid } })
+          );
+          if (!sdkDetail)
+            await tryGet("params.session_id", () =>
+              (client as any).session.get?.({ params: { session_id: sid } })
+            );
+          if (!sdkDetail)
+            await tryGet("body.id", () =>
+              (client as any).session.get?.({ body: { id: sid } })
+            );
+          if (!sdkDetail)
+            await tryGet("body.session_id", () =>
+              (client as any).session.get?.({ body: { session_id: sid } })
+            );
+          if (!sdkDetail)
+            await tryGet("direct.id", () =>
+              (client as any).session.get?.({ id: sid })
+            );
+          // Raw fetch fallback for comparison if still missing
+          if (!sdkDetail) {
+            try {
+              const rawRes = await fetch(`${base}/session/${sid}`);
+              if (rawRes.ok) rawDetail = await rawRes.json().catch(() => null);
+              attempts.push({
+                label: "raw.fetch",
+                ok: !!rawDetail,
+                rawStatus: rawRes.status,
+              });
+            } catch (e) {
+              attempts.push({
+                label: "raw.fetch",
+                ok: false,
+                error: (e as Error).message,
+              });
+            }
+          }
+          try {
+            sdkList = await client.session.list().catch((e: any) => {
+              console.warn(
+                "SDK session.list error",
+                (e && e.message) || String(e)
+              );
+              return null;
+            });
+          } catch {}
+        } catch (e) {
+          console.warn("SDK init error", (e as Error).message);
+        }
+        const payload = {
+          sdkDetail,
+          sdkListSummary: Array.isArray(sdkList)
+            ? sdkList.map((s) => ({ id: s.id, title: s.title }))
+            : sdkList,
+          attempts,
+          rawDetail,
+        };
+        const jsonText = JSON.stringify(payload, null, 2);
+        // Pass raw JSON; JSX will escape inside <textarea>
+        const html = renderAdvancedSdkJson(jsonText);
+        return new Response(sendDatastarPatchElements(html), {
+          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+        });
+      }
+    }
+
+    // Advanced session SSE: /sessions/:ip/:sid/advanced/stream
+    if (
+      url.pathname.startsWith("/sessions/") &&
+      url.pathname.endsWith("/advanced/stream")
+    ) {
+      const parts = url.pathname.split("/").filter(Boolean); // ['sessions', ip, sid, 'advanced','stream']
+      if (
+        parts.length === 5 &&
+        parts[3] === "advanced" &&
+        parts[4] === "stream"
+      ) {
+        const ip = parts[1];
+        const sid = parts[2];
+        if (!ipStore.includes(ip))
+          return new Response("Unknown IP", { status: 404 });
+        let sessionTitle = "";
+        try {
+          const cache = cachedSessionsByIp[ip];
+          if (cache && Array.isArray(cache.list)) {
+            const found = cache.list.find((s) => s.id === sid);
+            if (found && typeof found.title === "string")
+              sessionTitle = found.title.trim();
+          }
+        } catch {}
+        let interval: ReturnType<typeof setInterval> | undefined;
+        const stream = new ReadableStream({
+          async start(controller) {
+            async function push() {
+              try {
+                // Refresh messages to approximate count
+                const msgs = await fetchMessages(ip, sid);
+                const approxCount = msgs.length; // simple count (could refine)
+                const displayTitle = sessionTitle || sid;
+                const infoHtml = renderAdvancedInfo(displayTitle, approxCount);
+                const statusHtml = renderStatusDiv(
+                  "advanced-status",
+                  `Updated ${new Date().toLocaleTimeString()}`
+                );
+                controller.enqueue(
+                  new TextEncoder().encode(
+                    sendDatastarPatchElements(statusHtml)
+                  )
+                );
+                controller.enqueue(
+                  new TextEncoder().encode(sendDatastarPatchElements(infoHtml))
+                );
+              } catch (e) {
+                console.error("Advanced SSE push error", (e as Error).message);
+              }
+            }
+            await push();
+            interval = setInterval(push, 5000);
+          },
+          cancel() {
+            if (interval) clearInterval(interval);
+          },
+        });
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache, no-transform",
+            Connection: "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
       }
     }
 
@@ -863,12 +1084,10 @@ const server = Bun.serve({
           }
           if (!text)
             return new Response(
-              sendDatastarPatchElements(
-                renderNoTextResult(),
-              ),
+              sendDatastarPatchElements(renderNoTextResult()),
               {
                 headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-              },
+              }
             );
           // First message injection logic
           const sessionKey = sid;
@@ -884,7 +1103,7 @@ const server = Bun.serve({
               try {
                 const existing = await listMessages(
                   resolveBaseUrl(ip),
-                  sid,
+                  sid
                 ).catch(() => []);
                 existingCount = existing.length;
               } catch {}
@@ -911,7 +1130,7 @@ const server = Bun.serve({
           }
           const joined = result.replyTexts.join("\n") || "(no reply)";
           const escaped = escapeHtml(
-            joined.substring(0, 50) + (joined.length > 50 ? "..." : ""),
+            joined.substring(0, 50) + (joined.length > 50 ? "..." : "")
           );
           const html = renderMessageReplyResult(escaped);
           return new Response(sendDatastarPatchElements(html), {
@@ -931,7 +1150,7 @@ const server = Bun.serve({
 
     // Session detail page: GET /sessions/:ip/:sid
     if (url.pathname.startsWith("/sessions/")) {
-      const parts = url.pathname.split("/").filter(Boolean); // ['sessions', ip, sid]
+      const parts = url.pathname.split("/").filter(Boolean); // ['sessions', ip, sid, maybe 'advanced']
       if (
         parts.length === 3 &&
         req.method === "GET" &&
@@ -976,7 +1195,7 @@ const server = Bun.serve({
           if (!exists)
             return Response.redirect(
               `/sessions/${encodeURIComponent(ip)}`,
-              302,
+              302
             );
         } catch {
           /* ignore */
@@ -1021,6 +1240,35 @@ const server = Bun.serve({
           }
         } catch {}
         const page = renderSessionDetailPage({
+          ip,
+          sessionId: sid,
+          sessionTitle,
+        });
+        return new Response(page, {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+      // Advanced session page: GET /sessions/:ip/:sid/advanced
+      if (
+        parts.length === 4 &&
+        req.method === "GET" &&
+        parts[0] === "sessions" &&
+        parts[3] === "advanced"
+      ) {
+        const ip = parts[1];
+        const sid = parts[2];
+        if (!ipStore.includes(ip)) return Response.redirect("/", 302);
+        // Reuse title lookup from detail page (best effort)
+        let sessionTitle = "";
+        try {
+          const cache = cachedSessionsByIp[ip];
+          if (cache && Array.isArray(cache.list)) {
+            const found = cache.list.find((s) => s.id === sid);
+            if (found && typeof found.title === "string")
+              sessionTitle = found.title.trim();
+          }
+        } catch {}
+        const page = renderSessionAdvancedPage({
           ip,
           sessionId: sid,
           sessionTitle,
