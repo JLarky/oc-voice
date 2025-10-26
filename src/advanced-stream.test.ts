@@ -1,5 +1,5 @@
-import { test, expect } from 'bun:test';
-import { createAdvancedStores } from '../domain/advanced';
+import { test, expect } from "bun:test";
+import { createAdvancedStores } from "../domain/advanced";
 import {
   updateAggregatedSummary,
   prunePartsAndTypes,

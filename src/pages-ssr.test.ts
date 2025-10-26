@@ -1,5 +1,5 @@
-import { test, expect } from 'bun:test';
-import { pagesPlugin } from '../app/plugins/pages';
+import { test, expect } from "bun:test";
+import { pagesPlugin } from "../app/plugins/pages";
 import { Elysia } from "elysia";
 
 // Minimal ipStore with one IP to exercise page routes

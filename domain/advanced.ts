@@ -89,7 +89,8 @@ export function pruneAggregatedState(stores: AdvancedStores) {
     const created = agg.meta?.createdAt || 0;
     const lastEvent = agg.lastEventTs || created;
     const age = now - Math.max(created, lastEvent);
-    if (age > AGGREGATED_STATE_TTL_MS) delete stores.aggregatedStateBySession[key];
+    if (age > AGGREGATED_STATE_TTL_MS)
+      delete stores.aggregatedStateBySession[key];
   }
 }
 

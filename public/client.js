@@ -1,6 +1,5 @@
 // node_modules/@lift-html/core/esm/mod.js
-var HTMLElement_ = typeof HTMLElement !== "undefined" ? HTMLElement : class {
-};
+var HTMLElement_ = typeof HTMLElement !== "undefined" ? HTMLElement : class {};
 
 class LiftBaseClass extends HTMLElement_ {
   static options;
@@ -8,9 +7,8 @@ class LiftBaseClass extends HTMLElement_ {
   static observedAttributes;
 }
 function liftHtml(tagName, opts) {
-
   class LiftElement extends LiftBaseClass {
-    static hmr = new Set;
+    static hmr = new Set();
     acb = undefined;
     static options = opts;
     options = opts;
@@ -65,11 +63,9 @@ liftHtml("messages-wrapper", {
     const root = this;
     let rafId = null;
     const scroll = () => {
-      if (rafId !== null)
-        cancelAnimationFrame(rafId);
+      if (rafId !== null) cancelAnimationFrame(rafId);
       const list2 = root.querySelector('[id^="messages-list-"]');
-      if (!list2)
-        return;
+      if (!list2) return;
       rafId = requestAnimationFrame(() => {
         rafId = null;
         list2.scrollTop = list2.scrollHeight;
@@ -82,24 +78,21 @@ liftHtml("messages-wrapper", {
     mutObs.observe(root, {
       childList: true,
       subtree: true,
-      characterData: true
+      characterData: true,
     });
     const resizeObs = new ResizeObserver(() => scroll());
     const list = root.querySelector('[id^="messages-list-"]');
-    if (list)
-      resizeObs.observe(list);
-    else
-      resizeObs.observe(root);
+    if (list) resizeObs.observe(list);
+    else resizeObs.observe(root);
     const onWinResize = () => scroll();
     window.addEventListener("resize", onWinResize);
     destroy(() => {
-      if (rafId !== null)
-        cancelAnimationFrame(rafId);
+      if (rafId !== null) cancelAnimationFrame(rafId);
       mutObs.disconnect();
       resizeObs.disconnect();
       window.removeEventListener("resize", onWinResize);
     });
-  }
+  },
 });
 liftHtml("speech-button", {
   init(destroy) {
@@ -111,8 +104,7 @@ liftHtml("speech-button", {
     const LS_KEY = "speechAutoPlay";
     try {
       const stored = localStorage.getItem(LS_KEY);
-      if (stored === "false")
-        isPlaying = false;
+      if (stored === "false") isPlaying = false;
     } catch {}
     let lastSpoken = "";
     let pending = null;
@@ -137,11 +129,13 @@ liftHtml("speech-button", {
       root.appendChild(testBtn);
     } else {
       const buttons = Array.from(root.querySelectorAll("button"));
-      readBtn = buttons.find((b) => /read summary/i.test(b.textContent || "")) || readBtn;
-      playPause = buttons.find((b) => /(play|pause)/i.test(b.textContent || "")) || null;
+      readBtn =
+        buttons.find((b) => /read summary/i.test(b.textContent || "")) ||
+        readBtn;
+      playPause =
+        buttons.find((b) => /(play|pause)/i.test(b.textContent || "")) || null;
       testBtn = buttons.find((b) => /test/i.test(b.textContent || "")) || null;
-      if (playPause)
-        playPause.textContent = isPlaying ? "Pause" : "Play";
+      if (playPause) playPause.textContent = isPlaying ? "Pause" : "Play";
     }
     if (playPause) {
       playPause.addEventListener("click", () => {
@@ -151,8 +145,7 @@ liftHtml("speech-button", {
           localStorage.setItem(LS_KEY, String(isPlaying));
         } catch {}
         console.log("playPause toggle", { isPlaying });
-        if (isPlaying)
-          triggerAutoSpeak();
+        if (isPlaying) triggerAutoSpeak();
       });
     }
     if (testBtn) {
@@ -167,7 +160,10 @@ liftHtml("speech-button", {
         let voices = speechSynthesis.getVoices();
         if (!voices.length) {
           voices = await new Promise((resolve) => {
-            const timer = setTimeout(() => resolve(speechSynthesis.getVoices()), 1000);
+            const timer = setTimeout(
+              () => resolve(speechSynthesis.getVoices()),
+              1000,
+            );
             const handler = () => {
               clearTimeout(timer);
               speechSynthesis.removeEventListener("voiceschanged", handler);
@@ -179,8 +175,7 @@ liftHtml("speech-button", {
         try {
           const utter = new SpeechSynthesisUtterance("hi");
           const chosen = voices.find((v) => /en/i.test(v.lang)) || voices[0];
-          if (chosen)
-            utter.voice = chosen;
+          if (chosen) utter.voice = chosen;
           utter.onerror = (e) => console.warn("[tts] error", e);
           speechSynthesis.speak(utter);
         } catch (err) {
@@ -193,17 +188,17 @@ liftHtml("speech-button", {
     }
     function extractSummary() {
       const el = document.querySelector(".messages-summary");
-      if (!el)
-        return "";
+      if (!el) return "";
       let text = (el.textContent || "").replace(/\s+/g, " ").trim();
-      text = text.replace(/^summary:\s*/i, "").replace(/\b(action|info)\s*$/i, "").trim();
+      text = text
+        .replace(/^summary:\s*/i, "")
+        .replace(/\b(action|info)\s*$/i, "")
+        .trim();
       return text;
     }
     function speak(summary) {
-      if (!("speechSynthesis" in window))
-        return;
-      if (!summary)
-        return;
+      if (!("speechSynthesis" in window)) return;
+      if (!summary) return;
       try {
         speechSynthesis.cancel();
       } catch {}
@@ -221,32 +216,31 @@ liftHtml("speech-button", {
       speechSynthesis.speak(currentUtter);
     }
     function isPlaceholder(s) {
-      return !s || s === "..." || /^(\(no recent messages\)|\(no messages\)|\(empty summary\)|\(summary failed\))$/i.test(s);
+      return (
+        !s ||
+        s === "..." ||
+        /^(\(no recent messages\)|\(no messages\)|\(empty summary\)|\(summary failed\))$/i.test(
+          s,
+        )
+      );
     }
     function considerAutoSpeak(summary) {
-      if (!isPlaying)
-        return;
-      if (!summary || isPlaceholder(summary))
-        return;
+      if (!isPlaying) return;
+      if (!summary || isPlaceholder(summary)) return;
       if (currentUtter) {
         if (summary !== lastSpoken && !isPlaceholder(summary))
           pending = summary;
         return;
       }
-      if (summary === lastSpoken)
-        return;
+      if (summary === lastSpoken) return;
       speak(summary);
     }
     function triggerAutoSpeak() {
       const s = extractSummary();
-      if (!s || s === lastSpoken)
-        return;
-      if (isPlaceholder(s))
-        return;
-      if (!currentUtter)
-        speak(s);
-      else
-        pending = s;
+      if (!s || s === lastSpoken) return;
+      if (isPlaceholder(s)) return;
+      if (!currentUtter) speak(s);
+      else pending = s;
     }
     readBtn.addEventListener("click", () => {
       const s = extractSummary() || "No summary yet.";
@@ -263,39 +257,39 @@ liftHtml("speech-button", {
     let initialConsumed = false;
     function updateUIAndAuto() {
       const s = extractSummary();
-      if (s)
-        readBtn.title = s;
+      if (s) readBtn.title = s;
       if (!initialConsumed) {
-        if (s !== initialSummary)
-          initialConsumed = true;
+        if (s !== initialSummary) initialConsumed = true;
         return;
       }
       considerAutoSpeak(s);
     }
     updateUIAndAuto();
     destroy(() => {
-      if (obs)
-        obs.disconnect();
+      if (obs) obs.disconnect();
       clearInterval(intervalId);
       try {
         speechSynthesis.cancel();
       } catch {}
     });
-  }
+  },
 });
 liftHtml("submit-on-enter", {
   init(destroy) {
-    const abort = new AbortController;
+    const abort = new AbortController();
     destroy(() => abort.abort());
     const root = this;
     const textarea = root.querySelector("textarea");
-    if (!textarea)
-      return;
-    textarea.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        this.closest("form")?.requestSubmit();
-      }
-    }, abort);
-  }
+    if (!textarea) return;
+    textarea.addEventListener(
+      "keydown",
+      (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          this.closest("form")?.requestSubmit();
+        }
+      },
+      abort,
+    );
+  },
 });

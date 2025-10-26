@@ -1,5 +1,5 @@
-import { test, expect } from 'bun:test';
-import { createAdvancedStores, reuseOrPlaceholder } from '../domain/advanced';
+import { test, expect } from "bun:test";
+import { createAdvancedStores, reuseOrPlaceholder } from "../domain/advanced";
 import { shouldReuseSummary } from "../src/hash";
 
 test("reuseOrPlaceholder returns placeholder for new hash", () => {

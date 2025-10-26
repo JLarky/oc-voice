@@ -21,24 +21,30 @@ const app = new Elysia()
     createAdvancedPlugin(
       ipStore,
       advancedAggregatedStateBySession,
-      advancedStores
-    )
+      advancedStores,
+    ),
   )
   // Mount SSR pages (HTML) parity plugin
   .use((await import("./plugins/pages")).pagesPlugin(ipStore))
-  .get('/', () => new Response(Bun.file('index.html'), { headers: { 'Content-Type': 'text/html; charset=utf-8' } }))
+  .get(
+    "/",
+    () =>
+      new Response(Bun.file("index.html"), {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      }),
+  )
   .onError(({ error }) => {
     const message =
-      error && typeof error === 'object' && 'message' in error
+      error && typeof error === "object" && "message" in error
         ? (error as any).message
         : String(error);
     return {
       ok: false,
-      error: message
+      error: message,
     };
   })
   .listen(3333);
 
 console.log(
-  "Prototype Elysia app listening on http://localhost:" + app.server?.port
+  "Prototype Elysia app listening on http://localhost:" + app.server?.port,
 );
