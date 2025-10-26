@@ -1,6 +1,5 @@
-// lists.tsx - reusable list item renderers migrated to JSX (sessions + IP lists)
+// lists.tsx - reusable list item components (sessions + IP lists)
 import { h } from "preact";
-import { render } from "preact-render-to-string";
 
 interface Session {
   id: string;
@@ -41,17 +40,6 @@ export function SessionsUl({ ip, sessions, summarizerId }: SessionsUlProps) {
   );
 }
 
-export function renderSessionsUl(
-  ip: string,
-  sessions: Session[],
-  summarizerId?: string
-): string {
-  // Rely on Preact escaping for id/title; ip validated upstream.
-  return render(
-    <SessionsUl ip={ip} sessions={sessions} summarizerId={summarizerId} />
-  );
-}
-
 interface IpsUlProps {
   ips: string[];
 }
@@ -79,8 +67,4 @@ export function IpsUl({ ips }: IpsUlProps) {
       ))}
     </ul>
   );
-}
-
-export function renderIpsUl(ips: string[]): string {
-  return render(<IpsUl ips={ips} />);
 }

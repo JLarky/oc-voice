@@ -1,8 +1,9 @@
 import { describe, test, expect } from "bun:test";
+import { h } from "preact";
+import { render } from "preact-render-to-string";
 import {
-  renderSessionsUl,
-  renderIpsUl,
-
+  SessionsUl,
+  IpsUl,
   escapeHtml,
   renderSessionDetailPage,
   renderSessionsListPage,
@@ -11,16 +12,16 @@ import {
 // Inline snapshot coverage focuses on small fragment helpers.
 // Page renderers are large; we assert key structural markers instead of full snapshots.
 
-describe("renderSessionsUl", () => {
+describe("SessionsUl component", () => {
   test("empty sessions yields empty li", () => {
-    const html = renderSessionsUl("127.0.0.1", [], undefined);
+    const html = render(<SessionsUl ip="127.0.0.1" sessions={[]} summarizerId={undefined} />);
     expect(html).toContain("(no sessions)");
     expect(html).toMatchInlineSnapshot(
       `"<ul id=\"sessions-ul\"><li class=\"empty\">(no sessions)</li></ul>"`,
     );
   });
   test("renders session entries with delete button", () => {
-    const html = renderSessionsUl("127.0.0.1", [{ id: "abc", title: "Title" }], undefined);
+    const html = render(<SessionsUl ip="127.0.0.1" sessions={[{ id: "abc", title: "Title" }]} summarizerId={undefined} />);
     expect(html).toContain("abc");
     expect(html).toContain("delete-session");
     expect(html).toMatchInlineSnapshot(
@@ -28,25 +29,25 @@ describe("renderSessionsUl", () => {
     );
   });
   test("applies opacity when summarizerId matches", () => {
-    const html = renderSessionsUl("127.0.0.1", [{ id: "summ123", title: "Discussion thread" }], "summ123");
+    const html = render(<SessionsUl ip="127.0.0.1" sessions={[{ id: "summ123", title: "Discussion thread" }]} summarizerId={"summ123"} />);
     expect(html).toContain("<li style=\"opacity:.5\">");
   });
   test("does not apply opacity when summarizerId mismatch even if title contains summary", () => {
-    const html = renderSessionsUl("127.0.0.1", [{ id: "other", title: "Conversation Summary" }], "summ123");
+    const html = render(<SessionsUl ip="127.0.0.1" sessions={[{ id: "other", title: "Conversation Summary" }]} summarizerId={"summ123"} />);
     expect(html).not.toContain("opacity:.5");
   });
 });
 
-describe("renderIpsUl", () => {
+describe("IpsUl component", () => {
   test("empty IP list yields empty li", () => {
-    const html = renderIpsUl([]);
+    const html = render(<IpsUl ips={[]} />);
     expect(html).toContain("(no addresses)");
     expect(html).toMatchInlineSnapshot(
       `"<ul id=\"ips-ul\"><li class=\"empty\">(no addresses)</li></ul>"`,
     );
   });
   test("renders IP entries with remove button", () => {
-    const html = renderIpsUl(["10.0.0.1"]);
+    const html = render(<IpsUl ips={["10.0.0.1"]} />);
     expect(html).toContain("10.0.0.1");
     expect(html).toContain("ips/remove/10.0.0.1");
     expect(html).toMatchInlineSnapshot(
