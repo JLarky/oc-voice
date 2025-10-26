@@ -21,12 +21,10 @@ export interface UpdateResult {
 }
 
 export function computeRecent(messages: { role: string; texts: string[] }[]) {
-  const recent = messages
-    .slice(-10)
-    .map((m) => ({
-      role: m.role,
-      text: (m.texts.join(" ") || "").trim().slice(0, 600),
-    }));
+  const recent = messages.slice(-10).map((m) => ({
+    role: m.role,
+    text: (m.texts.join(" ") || "").trim().slice(0, 600),
+  }));
   const forHash = messages
     .slice(-3)
     .map((m) => ({ role: m.role, text: (m.texts.join(" ") || "").trim() }));

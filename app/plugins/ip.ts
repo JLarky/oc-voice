@@ -1,21 +1,52 @@
-// app/plugins/ip.ts - Elysia IP routes plugin
+// app/plugins/ip.ts - Elysia IP routes plugin with persistence parity
 import { Elysia } from "elysia";
 import { addIp, removeIp } from "../../domain/ip";
+import { rename } from "fs/promises";
 
-export const ipPlugin = (ipStore: string[]) =>
-  new Elysia({ name: "ip" })
+export const ipPlugin = (ipStore: string[]) => {
+  const IP_STORE_FILE = "ip-store.json";
+  function loadIps() {
+    Bun.file(IP_STORE_FILE)
+      .text()
+      .then((text) => {
+        try {
+          const arr = JSON.parse(text);
+          if (Array.isArray(arr))
+            arr.forEach(
+              (v) =>
+                typeof v === "string" &&
+                !ipStore.includes(v) &&
+                ipStore.push(v),
+            );
+        } catch {}
+      })
+      .catch(() => {});
+  }
+  async function persistIps() {
+    try {
+      const json = JSON.stringify(ipStore);
+      await Bun.write(IP_STORE_FILE + ".tmp", json);
+      await rename(IP_STORE_FILE + ".tmp", IP_STORE_FILE);
+    } catch (e) {
+      try {
+        await Bun.write(IP_STORE_FILE, JSON.stringify(ipStore));
+      } catch {}
+    }
+  }
+  loadIps();
+  return new Elysia({ name: "ip" })
     .get("/ips", () => ({ ok: true, ips: ipStore }))
     .get("/ips/stream", () => {
-      // Basic parity SSE: status + ips list lines similar shape
+      // Parity SSE: status + ips list using legacy ids
       const stream = new ReadableStream({
         start(controller) {
           function push() {
             try {
               const status = `event: datastar-patch-elements\ndata: elements <div id=\"ips-status\" class=\"status\">Updated ${new Date().toLocaleTimeString()}<\\/div>\n\n`;
-              let listHtml = '<ul id="ips-list">';
+              let listHtml = '<ul id="ips-ul">';
               for (const ip of ipStore) listHtml += `<li>${ip}</li>`;
               listHtml += "</ul>";
-              const ips = `event: datastar-patch-elements\ndata: elements <div id=\"ips-list\">${listHtml}<\\/div>\n\n`;
+              const ips = `event: datastar-patch-elements\ndata: elements <div id=\"ips-ul\">${listHtml}<\\/div>\n\n`;
               controller.enqueue(new TextEncoder().encode(status));
               controller.enqueue(new TextEncoder().encode(ips));
             } catch {
@@ -40,10 +71,15 @@ export const ipPlugin = (ipStore: string[]) =>
         },
       });
     })
-    .post("/ips/add", ({ body }) => {
+    .post("/ips/add", async ({ body }) => {
       const raw = (body as any)?.ip ?? (body as any)?.IP ?? "";
-      return addIp(ipStore, String(raw));
+      const result = addIp(ipStore, String(raw));
+      if (result.ok) await persistIps();
+      return result;
     })
-    .post("/ips/remove/:ip", ({ params }) => {
-      return removeIp(ipStore, params.ip);
+    .post("/ips/remove/:ip", async ({ params }) => {
+      const result = removeIp(ipStore, params.ip);
+      if (result.ok) await persistIps();
+      return result;
     });
+};

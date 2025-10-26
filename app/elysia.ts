@@ -14,7 +14,8 @@ const app = new Elysia()
   .use(ipPlugin(ipStore))
   .use(sessionsPlugin(ipStore))
   .use(createMessagesPlugin(ipStore, advancedAggregatedStateBySession))
-  .use(createAdvancedPlugin(ipStore))
+  // Mount SSR pages (HTML) parity plugin
+  .use((await import("./plugins/pages")).pagesPlugin(ipStore))
   .get("/", () => ({
     ok: true,
     message: "prototype root",

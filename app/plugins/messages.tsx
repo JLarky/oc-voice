@@ -1,6 +1,7 @@
 // app/plugins/messages.ts - Elysia messages routes using queue domain (prototype)
 import { Elysia } from "elysia";
 import { FIRST_MESSAGE_INSTRUCTION, listMessages } from "../../src/oc-client";
+import { dataStarPatchElementsString } from "../../rendering/datastar";
 import {
   createQueueStores,
   enqueueMessage,
@@ -29,7 +30,18 @@ export function messagesPlugin(deps: MessagesPluginDeps, stores: QueueStores) {
   return new Elysia({ name: "messages" })
     .post("/sessions/:ip/:sid/message", async ({ params, body }) => {
       const { ip, sid } = params as any;
-      if (!deps.ipStore.includes(ip)) return { ok: false, error: "unknown ip" };
+      if (!deps.ipStore.includes(ip))
+        return new Response(
+          dataStarPatchElementsString(
+            <div id="session-message-result" class="result">
+              unknown ip
+            </div>,
+          ),
+          {
+            headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+            status: 404,
+          },
+        );
       let text =
         (body as any)?.messageText ||
         (body as any)?.messagetext ||
@@ -41,8 +53,18 @@ export function messagesPlugin(deps: MessagesPluginDeps, stores: QueueStores) {
           text = part.text.trim();
       }
       text = typeof text === "string" ? text.trim() : "";
-      if (!text) return { ok: false, error: "empty text" };
-      // first message injection (best-effort remote check)
+      if (!text)
+        return new Response(
+          dataStarPatchElementsString(
+            <div id="session-message-result" class="result">
+              empty text
+            </div>,
+          ),
+          {
+            headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+            status: 400,
+          },
+        );
       let injected = false;
       try {
         const msgs = await listMessages(resolveBaseUrl(ip), sid).catch(
@@ -65,24 +87,61 @@ export function messagesPlugin(deps: MessagesPluginDeps, stores: QueueStores) {
         resolveBaseUrl,
         deps.advancedAggregatedStateBySession,
       ).catch(() => {});
-      return { ok: true, queued: true, jobs: length, injected };
+      const jsx = (
+        <div id="session-message-result" class="result">
+          queued message for {sid} ({length} in queue)
+          {injected ? " | injected first context" : ""}
+        </div>
+      );
+      return new Response(dataStarPatchElementsString(jsx), {
+        headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+      });
     })
     .post("/sessions/:ip/:sid/message/retry", ({ params }) => {
       const { ip, sid } = params as any;
-      if (!deps.ipStore.includes(ip)) return { ok: false, error: "unknown ip" };
+      if (!deps.ipStore.includes(ip))
+        return new Response(
+          dataStarPatchElementsString(
+            <div id="session-message-result" class="result">
+              unknown ip
+            </div>,
+          ),
+          {
+            headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+            status: 404,
+          },
+        );
       const res = retryLastFailed(
         stores,
         ip,
         sid,
         deps.advancedAggregatedStateBySession,
       );
-      if (!res.ok) return { ok: false, error: res.error };
+      if (!res.ok)
+        return new Response(
+          dataStarPatchElementsString(
+            <div id="session-message-result" class="result">
+              {res.error}
+            </div>,
+          ),
+          {
+            headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+            status: 400,
+          },
+        );
       processMessageQueue(
         stores,
         resolveBaseUrl,
         deps.advancedAggregatedStateBySession,
       ).catch(() => {});
-      return { ok: true, queued: true };
+      const jsx = (
+        <div id="session-message-result" class="result">
+          retry queued for {sid}
+        </div>
+      );
+      return new Response(dataStarPatchElementsString(jsx), {
+        headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+      });
     });
 }
 

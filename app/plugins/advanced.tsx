@@ -12,9 +12,21 @@ import {
   prunePartsAndTypes,
 } from "../../domain/advanced-stream";
 import { listMessages } from "../../src/oc-client";
+import {
+  AdvancedEvents,
+  AdvancedRecentMessages,
+  AdvancedInfo,
+} from "../../rendering/fragments";
+import { MessageItems } from "../../rendering/MessageItems";
+import { dataStarPatchElementsString } from "../../rendering/datastar";
+import { renderAutoScrollScriptEvent } from "../../rendering/fragments";
 
-export function createAdvancedPlugin(ipStore: string[]) {
-  const stores: AdvancedStores = createAdvancedStores();
+export function createAdvancedPlugin(
+  ipStore: string[],
+  externalAggregatedState?: Record<string, any>,
+  injectedStores?: AdvancedStores,
+) {
+  const stores: AdvancedStores = injectedStores || createAdvancedStores();
   // periodic prune
   setInterval(() => pruneSummaryCache(stores), 30000);
   const resolveBase = (ip: string) => `http://${ip}:2000`;
@@ -27,6 +39,15 @@ export function createAdvancedPlugin(ipStore: string[]) {
           return new Response("Unknown IP", { status: 404 });
         const remoteBase = resolveBase(ip);
         const state = getAggregated(stores, ip, sid);
+        if (externalAggregatedState) {
+          const key = ip + "::" + sid;
+          externalAggregatedState[key] = externalAggregatedState[key] || {};
+          // merge shallow important fields
+          externalAggregatedState[key].shareUrl =
+            externalAggregatedState[key].shareUrl || state.shareUrl;
+          externalAggregatedState[key].summary = state.summary;
+          externalAggregatedState[key].actionFlag = state.actionFlag;
+        }
         const eventBuffer: any[] = [];
         const stream = new ReadableStream({
           async start(controller) {
@@ -47,23 +68,99 @@ export function createAdvancedPlugin(ipStore: string[]) {
                 );
                 state.summary = upd.summaryText;
                 state.actionFlag = upd.actionFlag;
+                if (externalAggregatedState) {
+                  const k = ip + "::" + sid;
+                  const ext =
+                    externalAggregatedState[k] ||
+                    (externalAggregatedState[k] = {});
+                  ext.summary = state.summary;
+                  ext.actionFlag = state.actionFlag;
+                  if (state.shareUrl && !ext.shareUrl)
+                    ext.shareUrl = state.shareUrl;
+                }
                 if (upd.syntheticEvent) {
                   eventBuffer.push(upd.syntheticEvent);
                   lastCount = upd.messageCount;
                   state.counts.syntheticMessageUpdates++;
                 }
                 prunePartsAndTypes(state.parts as any, state.lastTypes);
-                const payload = {
-                  aggregated: state,
-                  events: eventBuffer.slice(-MAX_EVENT_BUFFER),
-                };
-                controller.enqueue(
-                  new TextEncoder().encode("event: datastar-patch-elements\n"),
+                // Build HTML fragments mirroring legacy AdvancedEvents + RecentMessages + status + auto-scroll
+                const recentMsgs = Array.isArray(state.lastMessages)
+                  ? state.lastMessages
+                  : [];
+                const summaryText = state.summary || undefined;
+                const actionFlag = state.actionFlag || false;
+                const totalCount = state.messageCount || recentMsgs.length;
+                const listId = `messages-list-${sid}`;
+                // Recent messages fragment (with retry form on failure)
+                let recentJsx: any = (
+                  <AdvancedRecentMessages
+                    messages={recentMsgs as any}
+                    summaryText={summaryText}
+                    actionFlag={actionFlag}
+                    totalCount={totalCount}
+                    listId={listId}
+                  />
+                );
+                if (summaryText === "(send failed: retry)") {
+                  recentJsx = (
+                    <div id={listId}>
+                      <div style="font-size:.7rem;opacity:.6;margin-bottom:4px">
+                        recent messages (events-derived)
+                      </div>
+                      <MessageItems messages={recentMsgs as any} />
+                      <div
+                        class="messages-summary"
+                        style="opacity:.75;margin-top:4px"
+                      >
+                        send failed
+                        <form
+                          data-on:submit={`@post('/sessions/${ip}/${sid}/message/retry'); $messageText = ''`}
+                          style="display:inline;margin-left:8px"
+                        >
+                          <button type="submit" style="font-size:.65rem">
+                            retry last
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  );
+                }
+                const statusJsx = (
+                  <div
+                    id="messages-status"
+                    class="status"
+                  >{`Updated ${new Date().toLocaleTimeString()}`}</div>
+                );
+                const stateJson = JSON.stringify(state).slice(0, 4000);
+                const eventsJsx = (
+                  <AdvancedEvents
+                    events={eventBuffer
+                      .slice(-MAX_EVENT_BUFFER)
+                      .map((e) =>
+                        typeof e === "string" ? e : JSON.stringify(e),
+                      )}
+                    attempts={[]}
+                    stateJson={stateJson}
+                  />
                 );
                 controller.enqueue(
                   new TextEncoder().encode(
-                    "data: " + JSON.stringify(payload) + "\n\n",
+                    dataStarPatchElementsString(statusJsx),
                   ),
+                );
+                controller.enqueue(
+                  new TextEncoder().encode(
+                    dataStarPatchElementsString(recentJsx),
+                  ),
+                );
+                controller.enqueue(
+                  new TextEncoder().encode(
+                    dataStarPatchElementsString(eventsJsx),
+                  ),
+                );
+                controller.enqueue(
+                  new TextEncoder().encode(renderAutoScrollScriptEvent(listId)),
                 );
               } catch {}
             }
@@ -162,20 +259,41 @@ export function createAdvancedPlugin(ipStore: string[]) {
             async function push() {
               try {
                 const now = Date.now();
-                if (now - lastCountTs > 5000) {
+                if (now - lastCountTs > 4000) {
+                  // refresh approx count
                   const msgs = await listMessages(remoteBase, sid).catch(
                     () => [],
                   );
-                  lastCount = msgs.length;
+                  lastCount = Array.isArray(msgs) ? msgs.length : 0;
                   lastCountTs = now;
                 }
-                const payload = { ip, sid, approxCount: lastCount };
-                controller.enqueue(
-                  new TextEncoder().encode("event: datastar-patch-elements\n"),
+                // attempt shareUrl extraction from aggregated state (if populated by share route elsewhere)
+                const aggKey = ip + "::" + sid;
+                const aggState = (stores.aggregatedStateBySession as any)[
+                  aggKey
+                ];
+                const shareUrl = aggState?.shareUrl;
+                const infoJsx = (
+                  <AdvancedInfo
+                    title={sid}
+                    approxCount={lastCount}
+                    shareUrl={shareUrl}
+                  />
+                );
+                const statusJsx = (
+                  <div
+                    id="advanced-stream-status"
+                    class="status"
+                  >{`Updated ${new Date().toLocaleTimeString()}`}</div>
                 );
                 controller.enqueue(
                   new TextEncoder().encode(
-                    "data: " + JSON.stringify(payload) + "\n\n",
+                    dataStarPatchElementsString(infoJsx),
+                  ),
+                );
+                controller.enqueue(
+                  new TextEncoder().encode(
+                    dataStarPatchElementsString(statusJsx),
                   ),
                 );
               } catch {}
