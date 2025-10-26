@@ -3,9 +3,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-
     "build": "bun build src/client.ts --outdir public",
-    "dev": "bun run --watch server.ts",
+    "dev": "bun run --watch server.tsx",
     "watch": "bun build src/client.ts --outdir public --watch"
   },
   "dependencies": {
