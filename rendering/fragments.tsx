@@ -22,14 +22,12 @@ interface AdvancedSdkJsonProps {
 function AdvancedSdkJson({ jsonText }: AdvancedSdkJsonProps) {
   return (
     <div id="advanced-sdk-json-container">
-      <textarea
+      <pre
         id="advanced-sdk-json"
-        rows={16}
-        style="width:100%;font-family:monospace;font-size:.8rem;"
-        readOnly
+        style="width:100%;font-family:monospace;font-size:.8rem;min-height:50px;white-space:pre-wrap;word-break:break-word;overflow:auto;"
       >
         {jsonText}
-      </textarea>
+      </pre>
     </div>
   );
 }
@@ -80,27 +78,23 @@ function AdvancedEvents({ events, attempts, stateJson }: AdvancedEventsProps) {
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto">
         {stateJson && (
-          <textarea
-            readOnly
-            rows={Math.min(12, Math.max(3, Math.ceil(stateJson.length / 90)))}
-            style="width:100%;font-family:monospace;font-size:.65rem;background:#1a1a1a;color:#cfe;border:1px solid #555;padding:4px"
+          <pre
             class="advanced-event-state"
+            style="width:100%;font-family:monospace;font-size:.65rem;background:#1a1a1a;color:#cfe;border:1px solid #555;padding:4px;min-height:50px;white-space:pre-wrap;word-break:break-word;overflow:auto;"
           >
             {stateJson}
-          </textarea>
+          </pre>
         )}
         {shown.map((e, i) => {
           const rows = Math.min(8, Math.max(2, Math.ceil(e.length / 80)));
           return (
-            <textarea
+            <pre
               key={i}
-              readOnly
-              rows={rows}
               class="advanced-event-line"
-              style="width:100%;font-family:monospace;font-size:.65rem;background:#111;color:#eee;border:1px solid #333;padding:4px"
+              style="width:100%;font-family:monospace;font-size:.65rem;background:#111;color:#eee;border:1px solid #333;padding:4px;min-height:50px;white-space:pre-wrap;word-break:break-word;overflow:auto;"
             >
               {e}
-            </textarea>
+            </pre>
           );
         })}
       </div>
