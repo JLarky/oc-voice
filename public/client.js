@@ -157,7 +157,26 @@ liftHtml("speech-button", {
     }
     if (testBtn) {
       testBtn.addEventListener("click", () => {
-        const speakHi = () => {
+        try {
+          if ("speechSynthesis" in window) {
+            const u = new SpeechSynthesisUtterance("hi");
+            speechSynthesis.speak(u);
+            return;
+          }
+        } catch {}
+      });
+      const test2 = document.createElement("button");
+      test2.type = "button";
+      test2.textContent = "Test2";
+      test2.style.marginTop = "1rem";
+      test2.style.marginLeft = "0.5rem";
+      testBtn.after(test2);
+      test2.addEventListener("click", () => {
+        console.log("[tts:test2] click");
+        const speakHiForce = () => {
+          try {
+            speechSynthesis.cancel();
+          } catch {}
           try {
             const utter = new SpeechSynthesisUtterance("hi");
             const voices = speechSynthesis.getVoices();
@@ -167,66 +186,49 @@ liftHtml("speech-button", {
             utter.rate = 1;
             utter.pitch = 1;
             utter.volume = 1;
-            utter.onstart = () => console.log("[tts:test] onstart");
-            utter.onend = () => console.log("[tts:test] onend");
-            utter.onerror = (e) => console.warn("[tts:test] onerror", e);
+            utter.onstart = () => console.log("[tts:test2] onstart");
+            utter.onend = () => console.log("[tts:test2] onend");
+            utter.onerror = (e) => console.warn("[tts:test2] onerror", e);
             speechSynthesis.speak(utter);
-            console.log("[tts:test] speakHi invoked", { voices: voices.length, speaking: speechSynthesis.speaking });
+            console.log("[tts:test2] speak invoked", { voices: voices.length });
           } catch (err) {
-            console.warn("[tts:test] speakHi failed, fallback beep", err);
-            beepFallback();
-          }
-        };
-        const beepFallback = () => {
-          try {
-            const Ctx = window.AudioContext || window.webkitAudioContext;
-            const ctx = new Ctx;
-            const osc = ctx.createOscillator();
-            osc.type = "sine";
-            osc.frequency.value = 660;
-            osc.connect(ctx.destination);
-            osc.start();
-            setTimeout(() => {
-              try {
-                osc.stop();
-                ctx.close();
-              } catch {}
-            }, 240);
-          } catch (e) {
-            console.warn("[tts:test] audio fallback failed", e);
-          }
-        };
-        try {
-          if (!("speechSynthesis" in window)) {
-            beepFallback();
-            return;
-          }
-          if (speechSynthesis.speaking) {
-            console.log("[tts:test] already speaking, queuing hi after cancel");
+            console.warn("[tts:test2] speak failed, fallback beep", err);
             try {
-              speechSynthesis.cancel();
+              const Ctx = window.AudioContext || window.webkitAudioContext;
+              const ctx = new Ctx;
+              const osc = ctx.createOscillator();
+              osc.type = "square";
+              osc.frequency.value = 520;
+              osc.connect(ctx.destination);
+              osc.start();
+              setTimeout(() => {
+                try {
+                  osc.stop();
+                  ctx.close();
+                } catch {}
+              }, 180);
             } catch {}
           }
-          const voicesNow = speechSynthesis.getVoices();
-          console.log("[tts:test] initial voices", voicesNow.length);
-          if (voicesNow.length === 0) {
-            const voicesListener = () => {
-              speechSynthesis.removeEventListener("voiceschanged", voicesListener);
-              console.log("[tts:test] voiceschanged fired");
-              speakHi();
-            };
-            speechSynthesis.addEventListener("voiceschanged", voicesListener);
-            setTimeout(() => {
-              console.log("[tts:test] voices timeout fallback");
-              speakHi();
-            }, 800);
-            return;
-          }
-          speakHi();
-        } catch (err) {
-          console.warn("[tts:test] outer error, fallback beep", err);
-          beepFallback();
+        };
+        if (!("speechSynthesis" in window)) {
+          console.warn("[tts:test2] speechSynthesis not supported");
+          return;
         }
+        const voicesNow = speechSynthesis.getVoices();
+        if (!voicesNow.length) {
+          console.log("[tts:test2] waiting for voices");
+          const onVoices = () => {
+            speechSynthesis.removeEventListener("voiceschanged", onVoices);
+            console.log("[tts:test2] voiceschanged");
+            speakHiForce();
+          };
+          speechSynthesis.addEventListener("voiceschanged", onVoices);
+          setTimeout(() => {
+            speakHiForce();
+          }, 900);
+          return;
+        }
+        speakHiForce();
       });
     }
     function extractSummary() {
