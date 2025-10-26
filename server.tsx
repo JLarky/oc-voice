@@ -623,7 +623,11 @@ const server = Bun.serve({
         const list = cache?.list || [];
         const stream =
           dataStarPatchElementsString(
-            <div id="delete-session-result" class="result">
+            <div
+              id="delete-session-result"
+              class="result"
+              data-init={deletedOk ? `location.href='/sessions/${ip}'` : ""}
+            >
               {deletedOk
                 ? `Deleted session: ${sid}`
                 : "Delete failed or session not found"}
