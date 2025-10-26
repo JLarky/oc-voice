@@ -157,6 +157,25 @@ liftHtml("speech-button", {
     }
     if (testBtn) {
       testBtn.addEventListener("click", () => {
+        const originalLabel = testBtn.textContent || "Test";
+        testBtn.disabled = true;
+        testBtn.textContent = "Speaking: hi";
+        const restore = () => {
+          testBtn && (testBtn.disabled = false, testBtn.textContent = originalLabel);
+          if (wasPlayingBefore && !isPlaying) {
+            isPlaying = true;
+            if (playPause)
+              playPause.textContent = "Pause";
+            triggerAutoSpeak();
+          }
+        };
+        const wasPlayingBefore = isPlaying;
+        if (isPlaying) {
+          isPlaying = false;
+          if (playPause)
+            playPause.textContent = "Play";
+        }
+        let spoke = false;
         try {
           if ("speechSynthesis" in window) {
             try {
@@ -170,6 +189,10 @@ liftHtml("speech-button", {
                 u.voice = voice;
               u.rate = 1;
               u.pitch = 1;
+              u.onend = () => {
+                spoke = true;
+                restore();
+              };
               speechSynthesis.speak(u);
             };
             if (speechSynthesis.getVoices().length === 0) {
@@ -182,6 +205,10 @@ liftHtml("speech-button", {
             } else {
               ensureVoices();
             }
+            setTimeout(() => {
+              if (!spoke)
+                restore();
+            }, 2000);
             return;
           }
         } catch {}
@@ -197,8 +224,11 @@ liftHtml("speech-button", {
               osc.stop();
               ctx.close();
             } catch {}
-          }, 250);
-        } catch {}
+            restore();
+          }, 300);
+        } catch {
+          restore();
+        }
       });
     }
     function extractSummary() {

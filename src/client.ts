@@ -113,7 +113,26 @@ liftHtml("speech-button", {
     }
     if (testBtn) {
       testBtn.addEventListener("click", () => {
-        // Speak 'hi' via TTS reliably (no autoplay pause)
+        // Provide visible + audible confirmation; avoid summary race.
+        const originalLabel = testBtn!.textContent || "Test";
+        testBtn!.disabled = true;
+        testBtn!.textContent = "Speaking: hi";
+        const restore = () => {
+          testBtn && (testBtn.disabled = false, testBtn.textContent = originalLabel);
+          if (wasPlayingBefore && !isPlaying) {
+            // Autoplay was temporarily paused; restore.
+            isPlaying = true;
+            if (playPause) playPause.textContent = "Pause";
+            triggerAutoSpeak();
+          }
+        };
+        // Temporarily pause auto speak so 'hi' isn't overridden
+        const wasPlayingBefore = isPlaying;
+        if (isPlaying) {
+          isPlaying = false;
+          if (playPause) playPause.textContent = "Play"; // reflect paused state
+        }
+        let spoke = false;
         try {
           if ("speechSynthesis" in window) {
             try { speechSynthesis.cancel(); } catch {}
@@ -124,20 +143,21 @@ liftHtml("speech-button", {
               if (voice) u.voice = voice;
               u.rate = 1;
               u.pitch = 1;
+              u.onend = () => { spoke = true; restore(); };
               speechSynthesis.speak(u);
             };
             if (speechSynthesis.getVoices().length === 0) {
-              // Voices may not be loaded yet; wait for event then speak.
               const onVoices = () => {
                 speechSynthesis.removeEventListener('voiceschanged', onVoices as any);
                 ensureVoices();
               };
               speechSynthesis.addEventListener('voiceschanged', onVoices as any);
-              // Fallback timeout if event never fires.
               setTimeout(ensureVoices, 500);
             } else {
               ensureVoices();
             }
+            // Fallback restore in case onend never fires
+            setTimeout(() => { if (!spoke) restore(); }, 2000);
             return;
           }
         } catch {}
@@ -152,12 +172,10 @@ liftHtml("speech-button", {
           osc.connect(ctx.destination);
           osc.start();
           setTimeout(() => {
-            try {
-              osc.stop();
-              ctx.close();
-            } catch {}
-          }, 250);
-        } catch {}
+            try { osc.stop(); ctx.close(); } catch {}
+            restore();
+          }, 300);
+        } catch { restore(); }
       });
     }
 
