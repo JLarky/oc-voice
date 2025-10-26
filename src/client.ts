@@ -116,7 +116,7 @@ liftHtml("speech-button", {
         let voices = speechSynthesis.getVoices();
         if (voices.length) return voices;
         return new Promise((resolve) => {
-          const timer = setTimeout(() => resolve(speechSynthesis.getVoices()), 1500);
+          const timer = setTimeout(() => resolve(speechSynthesis.getVoices()), 2000);
           const handler = () => {
             clearTimeout(timer);
             speechSynthesis.removeEventListener('voiceschanged', handler as any);
@@ -127,27 +127,30 @@ liftHtml("speech-button", {
       };
       const speakTest = async () => {
         if (!('speechSynthesis' in window)) {
-          console.warn('[tts] speechSynthesis unavailable');
+          window.alert('TTS not supported in this browser');
           return;
         }
         try { speechSynthesis.cancel(); } catch {}
         const voices = await waitForVoices();
-        if (!voices.length) console.warn('[tts] no voices loaded');
         const chosen = voices.find(v => /en/i.test(v.lang)) || voices[0];
+        if (!voices.length) {
+          window.alert('No voices available');
+          return;
+        }
         try {
-          const utter = new SpeechSynthesisUtterance('hi');
+          const utter = new SpeechSynthesisUtterance('Speech synthesis test. If you hear this spoken clearly it works.');
           if (chosen) utter.voice = chosen;
-          utter.onstart = () => console.log('[tts] onstart', { voice: chosen?.name, lang: chosen?.lang });
-          utter.onend = () => console.log('[tts] onend');
-          utter.onerror = (e) => console.warn('[tts] error', e);
+          utter.onstart = () => { try { window.alert('Speech start voice=' + (chosen?.name || 'unknown')); } catch {}; };
+          utter.onend = () => { try { window.alert('Speech ended'); } catch {}; };
+          utter.onerror = (e) => { try { window.alert('Speech error: ' + (e.error || 'unknown')); } catch {}; };
           speechSynthesis.speak(utter);
-          console.log('[tts] speak invoked', { totalVoices: voices.length, chosen: chosen?.name });
+          window.alert('Invoked speak voices=' + voices.length + ' chosen=' + (chosen?.name || 'none'));
         } catch (err) {
-          console.warn('[tts] speak failed', err);
+          window.alert('Speak failed: ' + (err instanceof Error ? err.message : String(err)));
         }
       };
       testBtn.addEventListener('click', () => { speakTest(); });
-      // Diagnostic secondary button
+      // Diagnostic secondary button (detailed enumeration + fallback)
       const diagBtn = document.createElement('button');
       diagBtn.type = 'button';
       diagBtn.textContent = 'Diag TTS';
@@ -155,41 +158,38 @@ liftHtml("speech-button", {
       diagBtn.style.marginLeft = '0.5rem';
       testBtn.after(diagBtn);
       diagBtn.addEventListener('click', async () => {
-        if (!('speechSynthesis' in window)) { console.warn('[tts:diag] speechSynthesis unavailable'); return; }
-        const voicesInitial = speechSynthesis.getVoices();
-        console.log('[tts:diag] initial voices', voicesInitial.map(v => ({ name: v.name, lang: v.lang, default: (v as any).default })));
+        if (!('speechSynthesis' in window)) { window.alert('TTS unsupported'); return; }
+        let voicesInitial = speechSynthesis.getVoices();
+        const listStrInitial = voicesInitial.map(v => v.name + '(' + v.lang + ')').join(', ') || '(none)';
+        try { window.alert('Initial voices: ' + listStrInitial); } catch {}
         const voices = await waitForVoices();
-        console.log('[tts:diag] awaited voices', voices.map(v => ({ name: v.name, lang: v.lang, default: (v as any).default })));
-        console.log('[tts:diag] interaction granted?', { hasClick: true });
+        const listStr = voices.map(v => v.name + '(' + v.lang + ')').join(', ') || '(none)';
+        try { window.alert('Loaded voices: ' + listStr); } catch {}
         try { speechSynthesis.cancel(); } catch {}
-        const utter = new SpeechSynthesisUtterance('diagnostic test of speech synthesis');
         const chosen = voices.find(v => /en/i.test(v.lang)) || voices[0];
+        const utter = new SpeechSynthesisUtterance('Diagnostic speech synthesis phrase. You should hear this sentence clearly.');
         if (chosen) utter.voice = chosen;
-        utter.rate = 1; utter.pitch = 1; utter.volume = 1;
-        utter.onstart = () => console.log('[tts:diag] onstart');
-        utter.onend = () => console.log('[tts:diag] onend');
-        utter.onerror = (e) => console.warn('[tts:diag] onerror', e);
-        try {
-          speechSynthesis.speak(utter);
-          console.log('[tts:diag] speak invoked', { chosen: chosen?.name, voicesCount: voices.length });
-        } catch (err) {
-          console.warn('[tts:diag] speak threw', err);
-        }
-        // Fallback beep to test audio output path
+        utter.onstart = () => { try { window.alert('Diag start voice=' + (chosen?.name || 'unknown')); } catch {}; };
+        utter.onend = () => { try { window.alert('Diag end'); } catch {}; };
+        utter.onerror = (e) => { try { window.alert('Diag error: ' + (e.error || 'unknown')); } catch {}; };
+        let started = false;
+        utter.onstart = () => { started = true; try { window.alert('Diag start voice=' + (chosen?.name || 'unknown')); } catch {}; };
+        speechSynthesis.speak(utter);
+        try { window.alert('Diag speak invoked voices=' + voices.length + ' chosen=' + (chosen?.name || 'none')); } catch {}
         setTimeout(() => {
-          if (speechSynthesis.speaking) return; // speech worked
+          if (speechSynthesis.speaking || started) return; // Speech started
           try {
             const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
             const ctx = new Ctx();
             const osc = ctx.createOscillator();
             osc.type = 'sine'; osc.frequency.value = 440;
             osc.connect(ctx.destination); osc.start();
-            setTimeout(() => { try { osc.stop(); ctx.close(); } catch {}; }, 300);
-            console.log('[tts:diag] fallback beep played');
+            setTimeout(() => { try { osc.stop(); ctx.close(); } catch {}; }, 350);
+            window.alert('Fallback beep (speech did not start)');
           } catch (err) {
-            console.warn('[tts:diag] fallback beep failed', err);
+            window.alert('Fallback beep failed: ' + (err instanceof Error ? err.message : String(err)));
           }
-        }, 1200);
+        }, 1800);
       });
     }
 
