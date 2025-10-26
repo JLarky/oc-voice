@@ -1,5 +1,5 @@
 // index.ts - aggregate rendering exports
-// sendDatastarPatchElements removed (unused)
+
 export { renderSessionsListPage } from "./sessions-list";
 export { renderSessionDetailPage } from "./session-detail";
 export { renderSessionAdvancedPage } from "./session-advanced";

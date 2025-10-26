@@ -425,8 +425,6 @@ async function fetchMessages(ip: string, sessionId: string) {
   }
 }
 
-// Legacy messagesSSE removed; advanced events stream now handles messages + summary.
-
 // SSE of IP addresses
 function ipsSSE(): Response {
   let interval: ReturnType<typeof setInterval> | undefined;
@@ -1024,9 +1022,6 @@ const server = Bun.serve({
         });
       }
     }
-    // Deprecated messages SSE endpoint removed; use /sessions/:ip/:sid/advanced/events/stream instead.
-
-    // Advanced raw JSON endpoint removed (manual fetch disabled)
 
     // Advanced SDK JSON: GET /sessions/:ip/:sid/advanced/sdk-json
     if (
