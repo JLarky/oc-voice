@@ -1,6 +1,6 @@
 // server.ts - Bun HTTP server serving index.html, bundled client, and API endpoints
 
-const port = 3000;
+const port = 3001;
 
 import { rename } from "fs/promises";
 import { createOpencodeClient } from "@opencode-ai/sdk";
