@@ -20,7 +20,10 @@ import {
 } from "../../rendering/fragments";
 import { MessageItems } from "../../rendering/MessageItems";
 import { dataStarPatchElementsString } from "../../rendering/datastar";
-import { renderAutoScrollScriptEvent } from "../../rendering/fragments";
+import {
+  renderAutoScrollScriptEvent,
+  renderUpdatedStatus,
+} from "../../rendering/fragments";
 
 export function createAdvancedPlugin(
   ipStore: string[],
@@ -130,12 +133,7 @@ export function createAdvancedPlugin(
                     </div>
                   );
                 }
-                const statusJsx = (
-                  <div
-                    id="messages-status"
-                    class="status"
-                  >{`Updated ${new Date().toLocaleTimeString()}`}</div>
-                );
+                const statusJsx = renderUpdatedStatus("messages-status");
                 const stateJson = JSON.stringify(state).slice(0, 4000);
                 const eventsJsx = (
                   <AdvancedEvents
@@ -284,12 +282,7 @@ export function createAdvancedPlugin(
                     shareUrl={shareUrl}
                   />
                 );
-                const statusJsx = (
-                  <div
-                    id="advanced-stream-status"
-                    class="status"
-                  >{`Updated ${new Date().toLocaleTimeString()}`}</div>
-                );
+                const statusJsx = renderUpdatedStatus("advanced-stream-status");
                 controller.enqueue(
                   new TextEncoder().encode(
                     dataStarPatchElementsString(infoJsx),

@@ -259,6 +259,7 @@ import {
   StatusDiv,
   AdvancedEvents,
   AdvancedRecentMessages,
+  renderUpdatedStatus,
 } from "./rendering/fragments";
 import { IpsUl, SessionsUl } from "./rendering/lists";
 
@@ -354,11 +355,7 @@ function sessionsSSE(ip: string): Response {
       async function push() {
         try {
           const list = await fetchSessionsFresh(ip);
-          const statusJsx = (
-            <div id="sessions-status" class="status">
-              {`Updated ${new Date().toLocaleTimeString()}`}
-            </div>
-          );
+          const statusJsx = renderUpdatedStatus("sessions-status");
           const summarizerId = await readSummarizerId();
           const listWrapperJsx = (
             <div id="sessions-list">

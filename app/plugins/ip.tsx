@@ -1,8 +1,9 @@
 // app/plugins/ip.tsx - Elysia IP routes plugin with persistence parity (JSX fragments)
 import { Elysia } from "elysia";
 import { addIp, removeIp } from "../../domain/ip";
-import { dataStarPatchElementsString } from '../../rendering/datastar';
+import { dataStarPatchElementsString } from "../../rendering/datastar";
 import { rename } from "fs/promises";
+import { renderUpdatedStatus } from "../../rendering/fragments";
 
 export const ipPlugin = (ipStore: string[]) => {
   const IP_STORE_FILE = "ip-store.json";
@@ -44,11 +45,7 @@ export const ipPlugin = (ipStore: string[]) => {
           let interval: any;
           function push() {
             try {
-              const statusJsx = (
-                <div id="ips-status" class="status">
-                  Updated {new Date().toLocaleTimeString()}
-                </div>
-              );
+              const statusJsx = renderUpdatedStatus("ips-status");
               const listJsx = (
                 <div id="ips-list">
                   <ul id="ips-ul">
@@ -59,7 +56,9 @@ export const ipPlugin = (ipStore: string[]) => {
                 </div>
               );
               controller.enqueue(
-                new TextEncoder().encode(dataStarPatchElementsString(statusJsx)),
+                new TextEncoder().encode(
+                  dataStarPatchElementsString(statusJsx),
+                ),
               );
               controller.enqueue(
                 new TextEncoder().encode(dataStarPatchElementsString(listJsx)),

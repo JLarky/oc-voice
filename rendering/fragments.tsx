@@ -13,7 +13,12 @@ function StatusDiv({ id, text }: StatusDivProps) {
     </div>
   );
 }
-export { StatusDiv };
+function renderUpdatedStatus(id: string): any {
+  return (
+    <StatusDiv id={id} text={`Updated ${new Date().toLocaleTimeString()}`} />
+  );
+}
+export { StatusDiv, renderUpdatedStatus };
 
 // (Removed legacy MessagesList; advanced recent messages fragment now handles display)// Advanced SDK JSON textarea fragment
 interface AdvancedSdkJsonProps {

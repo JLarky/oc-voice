@@ -1,14 +1,14 @@
 // ips-stream-integration.test.ts - verifies Elysia /ips/stream SSE JSX fragment patches
-import { test, expect } from 'bun:test';
+import { test, expect } from "bun:test";
 
 async function readIpsStream(timeoutMs = 1800) {
   try {
-    const res = await fetch('http://localhost:3333/ips/stream');
-    if (!res.ok) return { ok: false, text: '', events: 0 };
+    const res = await fetch("http://localhost:3333/ips/stream");
+    if (!res.ok) return { ok: false, text: "", events: 0 };
     const reader = res.body?.getReader();
-    if (!reader) return { ok: false, text: '', events: 0 };
+    if (!reader) return { ok: false, text: "", events: 0 };
     const decoder = new TextDecoder();
-    let buffered = '';
+    let buffered = "";
     let events = 0;
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -16,7 +16,7 @@ async function readIpsStream(timeoutMs = 1800) {
       if (chunk.done) break;
       buffered += decoder.decode(chunk.value, { stream: true });
       let idx;
-      while ((idx = buffered.indexOf('\n\n')) !== -1) {
+      while ((idx = buffered.indexOf("\n\n")) !== -1) {
         const rawEvent = buffered.slice(0, idx).trim();
         buffered = buffered.slice(idx + 2);
         if (!rawEvent) continue;
@@ -28,14 +28,16 @@ async function readIpsStream(timeoutMs = 1800) {
     }
     return { ok: true, text: buffered, events };
   } catch {
-    return { ok: false, text: '', events: 0 };
+    return { ok: false, text: "", events: 0 };
   }
 }
 
-test('ips stream emits status + list JSX patches', async () => {
+test("ips stream emits status + list JSX patches", async () => {
   const r = await readIpsStream();
   if (!r.ok || r.events === 0) {
-    console.warn('Elysia /ips/stream unreachable; skipping integration assertions');
+    console.warn(
+      "Elysia /ips/stream unreachable; skipping integration assertions",
+    );
     return;
   }
   // Expect both status and list containers
