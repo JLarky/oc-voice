@@ -157,6 +157,11 @@ liftHtml("speech-button", {
     }
     if (testBtn) {
       testBtn.addEventListener("click", () => {
+        const originalText = testBtn.textContent;
+        testBtn.textContent = "hi";
+        setTimeout(() => {
+          testBtn && (testBtn.textContent = originalText);
+        }, 800);
         try {
           if ("speechSynthesis" in window) {
             speechSynthesis.cancel();

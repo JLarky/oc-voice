@@ -113,6 +113,10 @@ liftHtml("speech-button", {
     }
     if (testBtn) {
       testBtn.addEventListener("click", () => {
+        // Visual feedback: temporarily show 'hi'
+        const originalText = testBtn!.textContent;
+        testBtn!.textContent = "hi";
+        setTimeout(() => { testBtn && (testBtn.textContent = originalText); }, 800);
         // Try speech first
         try {
           if ("speechSynthesis" in window) {
