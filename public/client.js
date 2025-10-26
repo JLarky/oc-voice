@@ -157,16 +157,31 @@ liftHtml("speech-button", {
     }
     if (testBtn) {
       testBtn.addEventListener("click", () => {
-        const originalText = testBtn.textContent;
-        testBtn.textContent = "hi";
-        setTimeout(() => {
-          testBtn && (testBtn.textContent = originalText);
-        }, 800);
         try {
           if ("speechSynthesis" in window) {
-            speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance("hi");
-            speechSynthesis.speak(u);
+            try {
+              speechSynthesis.cancel();
+            } catch {}
+            const ensureVoices = () => {
+              const voices = speechSynthesis.getVoices();
+              const voice = voices.find((v) => /en/i.test(v.lang)) || voices[0];
+              const u = new SpeechSynthesisUtterance("hi");
+              if (voice)
+                u.voice = voice;
+              u.rate = 1;
+              u.pitch = 1;
+              speechSynthesis.speak(u);
+            };
+            if (speechSynthesis.getVoices().length === 0) {
+              const onVoices = () => {
+                speechSynthesis.removeEventListener("voiceschanged", onVoices);
+                ensureVoices();
+              };
+              speechSynthesis.addEventListener("voiceschanged", onVoices);
+              setTimeout(ensureVoices, 500);
+            } else {
+              ensureVoices();
+            }
             return;
           }
         } catch {}

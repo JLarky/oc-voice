@@ -113,16 +113,31 @@ liftHtml("speech-button", {
     }
     if (testBtn) {
       testBtn.addEventListener("click", () => {
-        // Visual feedback: temporarily show 'hi'
-        const originalText = testBtn!.textContent;
-        testBtn!.textContent = "hi";
-        setTimeout(() => { testBtn && (testBtn.textContent = originalText); }, 800);
-        // Try speech first
+        // Speak 'hi' via TTS reliably (no autoplay pause)
         try {
           if ("speechSynthesis" in window) {
-            speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance("hi");
-            speechSynthesis.speak(u);
+            try { speechSynthesis.cancel(); } catch {}
+            const ensureVoices = () => {
+              const voices = speechSynthesis.getVoices();
+              const voice = voices.find(v => /en/i.test(v.lang)) || voices[0];
+              const u = new SpeechSynthesisUtterance("hi");
+              if (voice) u.voice = voice;
+              u.rate = 1;
+              u.pitch = 1;
+              speechSynthesis.speak(u);
+            };
+            if (speechSynthesis.getVoices().length === 0) {
+              // Voices may not be loaded yet; wait for event then speak.
+              const onVoices = () => {
+                speechSynthesis.removeEventListener('voiceschanged', onVoices as any);
+                ensureVoices();
+              };
+              speechSynthesis.addEventListener('voiceschanged', onVoices as any);
+              // Fallback timeout if event never fires.
+              setTimeout(ensureVoices, 500);
+            } else {
+              ensureVoices();
+            }
             return;
           }
         } catch {}
