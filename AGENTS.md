@@ -78,5 +78,12 @@ Entire repo (server, client, scripts).
 - Run scripts with: `bun run playpen/script.ts`
 - Common patterns to explore: `client.session.list()`, raw HTTP endpoints for messages
 
+## Pre-Commit Checklist
+- Always run tests: `bun test` (all must pass) or `mise run test:all` for tests + type-check
+- Build client bundle: `bun run build` (updates `public/client.js`)
+- Format: `mise run format` (oxfmt) — run before committing; if unavailable, skip
+- Only proceed to `git commit` after all above succeed; even for doc-only changes run tests + build
+- Agent reminder: when asked to commit, execute tests, build, format (if available) first, then stage & commit
+
 ## End
 Keep agents surgical—do only requested changes.
