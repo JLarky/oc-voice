@@ -14,14 +14,22 @@ import {
 
 describe("SessionsUl component", () => {
   test("empty sessions yields empty li", () => {
-    const html = render(<SessionsUl ip="127.0.0.1" sessions={[]} summarizerId={undefined} />);
+    const html = render(
+      <SessionsUl ip="127.0.0.1" sessions={[]} summarizerId={undefined} />,
+    );
     expect(html).toContain("(no sessions)");
     expect(html).toMatchInlineSnapshot(
       `"<ul id=\"sessions-ul\"><li class=\"empty\">(no sessions)</li></ul>"`,
     );
   });
   test("renders session entries with delete button", () => {
-    const html = render(<SessionsUl ip="127.0.0.1" sessions={[{ id: "abc", title: "Title" }]} summarizerId={undefined} />);
+    const html = render(
+      <SessionsUl
+        ip="127.0.0.1"
+        sessions={[{ id: "abc", title: "Title" }]}
+        summarizerId={undefined}
+      />,
+    );
     expect(html).toContain("abc");
     expect(html).toContain("delete-session");
     expect(html).toMatchInlineSnapshot(
@@ -29,11 +37,23 @@ describe("SessionsUl component", () => {
     );
   });
   test("applies opacity when summarizerId matches", () => {
-    const html = render(<SessionsUl ip="127.0.0.1" sessions={[{ id: "summ123", title: "Discussion thread" }]} summarizerId={"summ123"} />);
-    expect(html).toContain("<li style=\"opacity:.5\">");
+    const html = render(
+      <SessionsUl
+        ip="127.0.0.1"
+        sessions={[{ id: "summ123", title: "Discussion thread" }]}
+        summarizerId={"summ123"}
+      />,
+    );
+    expect(html).toContain('<li style="opacity:.5">');
   });
   test("does not apply opacity when summarizerId mismatch even if title contains summary", () => {
-    const html = render(<SessionsUl ip="127.0.0.1" sessions={[{ id: "other", title: "Conversation Summary" }]} summarizerId={"summ123"} />);
+    const html = render(
+      <SessionsUl
+        ip="127.0.0.1"
+        sessions={[{ id: "other", title: "Conversation Summary" }]}
+        summarizerId={"summ123"}
+      />,
+    );
     expect(html).not.toContain("opacity:.5");
   });
 });
@@ -59,10 +79,6 @@ describe("IpsUl component", () => {
 // renderMessageItems removed (messages now rendered via renderMessagesList with MessageItems)
 // Keeping tests focused on other helpers.
 
-
-
-
-
 describe("renderSessionDetailPage", () => {
   test("renders escaped title and key sections", () => {
     const html = renderSessionDetailPage({
@@ -72,8 +88,9 @@ describe("renderSessionDetailPage", () => {
     });
     expect(html).toContain("&lt;bad");
     expect(html).not.toContain("<bad>");
-    expect(html).toContain("@get('/sessions/1.2.3.4/sess123/messages/stream')");
-    expect(html).toContain("@get('/sessions/1.2.3.4/sess123/messages/stream')");
+    expect(html).toContain(
+      "@get('/sessions/1.2.3.4/sess123/advanced/events/stream')",
+    );
     expect(
       html.startsWith(
         '<!doctype html><html lang="en"><head><meta charset="UTF-8"/>',

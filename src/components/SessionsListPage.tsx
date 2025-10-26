@@ -1,4 +1,4 @@
-import { Layout } from './Layout';
+import { Layout } from "./Layout";
 
 export interface SessionsListProps {
   ip: string;
@@ -14,14 +14,14 @@ export function SessionsListPage({ ip }: SessionsListProps) {
       <h2>Sessions</h2>
       <button
         style={{
-          background: '#e74c3c',
-          color: '#fff',
-          marginBottom: '.5rem',
-          padding: '.25rem .5rem',
-          fontSize: '.7rem',
-          border: 'none',
-          borderRadius: '3px',
-          cursor: 'pointer',
+          background: "#e74c3c",
+          color: "#fff",
+          marginBottom: ".5rem",
+          padding: ".25rem .5rem",
+          fontSize: ".7rem",
+          border: "none",
+          borderRadius: "3px",
+          cursor: "pointer",
         }}
         data-on:click={`@post('/sessions/${ip}/clear-sessions')`}
       >
@@ -30,10 +30,7 @@ export function SessionsListPage({ ip }: SessionsListProps) {
       <div id="sessions-status" className="status">
         Connecting...
       </div>
-      <div
-        id="sessions-list"
-        data-init={`@get('/sessions/${ip}/stream')`}
-      >
+      <div id="sessions-list" data-init={`@get('/sessions/${ip}/stream')`}>
         <ul id="sessions-ul">
           <li class="empty">(loading)</li>
         </ul>

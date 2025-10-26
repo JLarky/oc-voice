@@ -113,34 +113,44 @@ liftHtml("speech-button", {
     }
     if (testBtn) {
       const speakTest = async () => {
-        if (!('speechSynthesis' in window)) {
-          console.warn('[tts] speechSynthesis unavailable');
+        if (!("speechSynthesis" in window)) {
+          console.warn("[tts] speechSynthesis unavailable");
           return;
         }
-        try { speechSynthesis.cancel(); } catch {}
+        try {
+          speechSynthesis.cancel();
+        } catch {}
         let voices = speechSynthesis.getVoices();
         if (!voices.length) {
           voices = await new Promise<SpeechSynthesisVoice[]>((resolve) => {
-            const timer = setTimeout(() => resolve(speechSynthesis.getVoices()), 1000);
+            const timer = setTimeout(
+              () => resolve(speechSynthesis.getVoices()),
+              1000,
+            );
             const handler = () => {
               clearTimeout(timer);
-              speechSynthesis.removeEventListener('voiceschanged', handler as any);
+              speechSynthesis.removeEventListener(
+                "voiceschanged",
+                handler as any,
+              );
               resolve(speechSynthesis.getVoices());
             };
-            speechSynthesis.addEventListener('voiceschanged', handler as any);
+            speechSynthesis.addEventListener("voiceschanged", handler as any);
           });
         }
         try {
-          const utter = new SpeechSynthesisUtterance('hi');
-          const chosen = voices.find(v => /en/i.test(v.lang)) || voices[0];
+          const utter = new SpeechSynthesisUtterance("hi");
+          const chosen = voices.find((v) => /en/i.test(v.lang)) || voices[0];
           if (chosen) utter.voice = chosen;
-          utter.onerror = (e) => console.warn('[tts] error', e);
+          utter.onerror = (e) => console.warn("[tts] error", e);
           speechSynthesis.speak(utter);
         } catch (err) {
-          console.warn('[tts] speak failed', err);
+          console.warn("[tts] speak failed", err);
         }
       };
-      testBtn.addEventListener('click', () => { speakTest(); });
+      testBtn.addEventListener("click", () => {
+        speakTest();
+      });
     }
 
     function extractSummary(): string {

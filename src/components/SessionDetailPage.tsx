@@ -15,7 +15,7 @@ export function SessionDetailPage(props: SessionDetailProps) {
         <a href={`/sessions/${props.ip}`}>← Back to sessions for {props.ip}</a>
       </div>
       <speech-button>
-        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+        <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
           <a href={`/sessions/${props.ip}/${props.sessionId}/advanced`}>
             <button type="button">Advanced</button>
           </a>
@@ -32,9 +32,9 @@ export function SessionDetailPage(props: SessionDetailProps) {
         <div id="messages-list-container">
           <div
             id="messages-list"
-            data-init={`@get('/sessions/${props.ip}/${props.sessionId}/messages/stream')`}
+            data-init={`@get('/sessions/${props.ip}/${props.sessionId}/advanced/events/stream')`}
           >
-            <div>(loading)</div>
+            <div>(loading unified messages)</div>
           </div>
         </div>
       </messages-wrapper>

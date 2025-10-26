@@ -11,11 +11,14 @@ export function renderSessionDetailPage({
   sessionId,
   sessionTitle,
 }: SessionDetailProps): string {
-  return '<!doctype html>' + render(
-    <SessionDetailPage
-      ip={ip}
-      sessionId={sessionId}
-      sessionTitle={sessionTitle}
-    />,
+  return (
+    "<!doctype html>" +
+    render(
+      <SessionDetailPage
+        ip={ip}
+        sessionId={sessionId}
+        sessionTitle={sessionTitle}
+      />,
+    )
   );
 }

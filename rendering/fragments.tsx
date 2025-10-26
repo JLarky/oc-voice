@@ -15,40 +15,7 @@ function StatusDiv({ id, text }: StatusDivProps) {
 }
 export { StatusDiv };
 
-interface MessagesListProps {
-  messages: Msg[];
-  summaryText: string;
-  actionFlag: boolean;
-  totalCount: number;
-}
-function MessagesList({
-  messages,
-  summaryText,
-  actionFlag,
-  totalCount,
-}: MessagesListProps) {
-  const badge = actionFlag ? (
-    <span style="background:#ffd54f;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">
-      action
-    </span>
-  ) : (
-    <span style="background:#ccc;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">
-      info
-    </span>
-  );
-  return (
-    <div id="messages-list">
-      <MessageItems messages={messages} />
-      {totalCount > 0 && (
-        <div class="messages-summary" style="opacity:.55;margin-top:4px">
-          summary: {summaryText} {badge}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Advanced SDK JSON textarea fragment
+// (Removed legacy MessagesList; advanced recent messages fragment now handles display)// Advanced SDK JSON textarea fragment
 interface AdvancedSdkJsonProps {
   jsonText: string;
 }
@@ -87,23 +54,37 @@ export function renderAutoScrollScriptEvent(): string {
   );
 }
 // Advanced events fragment
-interface AdvancedEventsProps { events: string[]; attempts: any[]; stateJson?: string }
+interface AdvancedEventsProps {
+  events: string[];
+  attempts: any[];
+  stateJson?: string;
+}
 function AdvancedEvents({ events, attempts, stateJson }: AdvancedEventsProps) {
   // Render attempts summary and last ~30 events as individual textareas
   const shown = events.slice(-30);
   const attemptsSummary = attempts
-    .map(a => ({ url: a.url, ok: a.ok, error: a.error, closed: a.closed, events: a.events, durationMs: a.durationMs, notice: a.notice }))
-    .filter(a => a.url || a.notice);
+    .map((a) => ({
+      url: a.url,
+      ok: a.ok,
+      error: a.error,
+      closed: a.closed,
+      events: a.events,
+      durationMs: a.durationMs,
+      notice: a.notice,
+    }))
+    .filter((a) => a.url || a.notice);
   return (
-    <div id='advanced-events'>
-      <div style='font-size:.75rem;opacity:.65;margin-bottom:4px'>attempts: {JSON.stringify(attemptsSummary)}</div>
-      <div style='display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto'>
+    <div id="advanced-events-inner">
+      <div style="font-size:.75rem;opacity:.65;margin-bottom:4px">
+        attempts: {JSON.stringify(attemptsSummary)}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto">
         {stateJson && (
           <textarea
             readOnly
             rows={Math.min(12, Math.max(3, Math.ceil(stateJson.length / 90)))}
-            style='width:100%;font-family:monospace;font-size:.65rem;background:#1a1a1a;color:#cfe;border:1px solid #555;padding:4px'
-            class='advanced-event-state'
+            style="width:100%;font-family:monospace;font-size:.65rem;background:#1a1a1a;color:#cfe;border:1px solid #555;padding:4px"
+            class="advanced-event-state"
           >
             {stateJson}
           </textarea>
@@ -115,8 +96,8 @@ function AdvancedEvents({ events, attempts, stateJson }: AdvancedEventsProps) {
               key={i}
               readOnly
               rows={rows}
-              class='advanced-event-line'
-              style='width:100%;font-family:monospace;font-size:.65rem;background:#111;color:#eee;border:1px solid #333;padding:4px'
+              class="advanced-event-line"
+              style="width:100%;font-family:monospace;font-size:.65rem;background:#111;color:#eee;border:1px solid #333;padding:4px"
             >
               {e}
             </textarea>
@@ -126,4 +107,45 @@ function AdvancedEvents({ events, attempts, stateJson }: AdvancedEventsProps) {
     </div>
   );
 }
-export { MessagesList, AdvancedInfo, AdvancedSdkJson, AdvancedEvents };
+// Advanced recent messages fragment (last <=10 messages derived from aggregated state)
+interface AdvancedRecentMessagesProps {
+  messages: Msg[];
+  summaryText?: string;
+  actionFlag?: boolean;
+  totalCount?: number;
+}
+function AdvancedRecentMessages({
+  messages,
+  summaryText,
+  actionFlag,
+  totalCount,
+}: AdvancedRecentMessagesProps) {
+  const badge = actionFlag ? (
+    <span style="background:#ffd54f;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">
+      action
+    </span>
+  ) : (
+    <span style="background:#ccc;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">
+      info
+    </span>
+  );
+  return (
+    <div id="messages-list">
+      <div style="font-size:.7rem;opacity:.6;margin-bottom:4px">
+        recent messages (events-derived)
+      </div>
+      <MessageItems messages={messages} />
+      {typeof totalCount === "number" && totalCount > 0 && summaryText && (
+        <div class="messages-summary" style="opacity:.55;margin-top:4px">
+          summary: {summaryText} {badge}
+        </div>
+      )}
+    </div>
+  );
+}
+export {
+  AdvancedInfo,
+  AdvancedSdkJson,
+  AdvancedEvents,
+  AdvancedRecentMessages,
+};
