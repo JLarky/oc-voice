@@ -45,10 +45,12 @@ function AdvancedInfo({ title, approxCount }: AdvancedInfoProps) {
 }
 
 // Auto-scroll script SSE event payload
-export function renderAutoScrollScriptEvent(): string {
+export function renderAutoScrollScriptEvent(listId: string): string {
   return (
     "event: datastar-script\n" +
-    "data: script (function(){var el=document.getElementById('messages-list');if(!el) return;if(!el.__observerAdded){var obs=new MutationObserver(function(muts){var last=el.querySelector('.message:last-child');if(last&&last.scrollIntoView){last.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;});obs.observe(el,{childList:true,subtree:true});el.__observerAdded=true;}var lastMsg=el.querySelector('.message:last-child');if(lastMsg&&lastMsg.scrollIntoView){lastMsg.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;})();\n\n"
+    "data: script (function(){var el=document.getElementById('" +
+    listId +
+    "');if(!el) return;if(!el.__observerAdded){var obs=new MutationObserver(function(muts){var last=el.querySelector('.message:last-child');if(last&&last.scrollIntoView){last.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;});obs.observe(el,{childList:true,subtree:true});el.__observerAdded=true;}var lastMsg=el.querySelector('.message:last-child');if(lastMsg&&lastMsg.scrollIntoView){lastMsg.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;})();\n\n"
   );
 }
 // Advanced events fragment
@@ -107,12 +109,14 @@ interface AdvancedRecentMessagesProps {
   summaryText?: string;
   actionFlag?: boolean;
   totalCount?: number;
+  listId?: string;
 }
 function AdvancedRecentMessages({
   messages,
   summaryText,
   actionFlag,
   totalCount,
+  listId,
 }: AdvancedRecentMessagesProps) {
   const badge = actionFlag ? (
     <span style="background:#ffd54f;color:#000;padding:2px 6px;border-radius:3px;font-size:.65rem;margin-left:6px">
@@ -124,7 +128,7 @@ function AdvancedRecentMessages({
     </span>
   );
   return (
-    <div id="messages-list">
+    <div id={listId || "messages-list"}>
       <div style="font-size:.7rem;opacity:.6;margin-bottom:4px">
         recent messages (events-derived)
       </div>

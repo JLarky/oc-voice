@@ -8,7 +8,9 @@ liftHtml("messages-wrapper", {
     let rafId: number | null = null;
     const scroll = () => {
       if (rafId !== null) cancelAnimationFrame(rafId);
-      const list = root.querySelector("#messages-list") as HTMLElement | null;
+      const list = root.querySelector(
+        '[id^="messages-list-"]',
+      ) as HTMLElement | null;
       if (!list) return;
       // Defer until after layout
       rafId = requestAnimationFrame(() => {
@@ -33,7 +35,7 @@ liftHtml("messages-wrapper", {
     // Scroll when resized (viewport or element size changes)
     const resizeObs = new ResizeObserver(() => scroll());
     // Observe the messages-list if it exists, otherwise observe root
-    const list = root.querySelector("#messages-list");
+    const list = root.querySelector('[id^="messages-list-"]');
     if (list) resizeObs.observe(list);
     else resizeObs.observe(root);
 
@@ -219,7 +221,7 @@ liftHtml("speech-button", {
       speak(s);
     });
 
-    const list = document.getElementById("messages-list");
+    const list = document.querySelector('[id^="messages-list-"]');
     let obs: MutationObserver | null = null;
     if (list) {
       obs = new MutationObserver(() => updateUIAndAuto());

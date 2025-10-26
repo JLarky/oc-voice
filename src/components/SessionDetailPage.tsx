@@ -31,7 +31,7 @@ export function SessionDetailPage(props: SessionDetailProps) {
       <messages-wrapper>
         <div id="messages-list-container">
           <div
-            id="messages-list"
+            id={`messages-list-${props.sessionId}`}
             data-init={`@get('/sessions/${props.ip}/${props.sessionId}/advanced/events/stream')`}
           >
             <div>(loading unified messages)</div>

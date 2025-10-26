@@ -10,6 +10,7 @@ import {
   FIRST_MESSAGE_INSTRUCTION,
 } from "./src/oc-client";
 import { shouldReuseSummary } from "./src/hash";
+import { MessageItems } from "./rendering/MessageItems";
 
 // In-memory IP address key-value store (simple list of IPs)
 // Accepts only IPv4 dotted quads; prevents duplicates.
@@ -1000,6 +1001,7 @@ const server = Bun.serve({
             (advancedAggregatedStateBySession[aggKey].reconnects || 0) + 1;
         }
         const aggregatedState = advancedAggregatedStateBySession[aggKey];
+        const listId = `messages-list-${sid}`;
         const MAX_STATE_JSON_LEN = 4000;
         function applyEventToState(obj: any) {
           aggregatedState.counts.totalEvents++;
@@ -1105,11 +1107,12 @@ const server = Bun.serve({
                 summaryText={summaryText}
                 actionFlag={actionFlag}
                 totalCount={totalCount}
+                listId={listId}
               />
             );
             if (summaryText === "(send failed: retry)") {
               recentJsx = (
-                <div id="messages-list">
+                <div id={listId}>
                   <div style="font-size:.7rem;opacity:.6;margin-bottom:4px">
                     recent messages (events-derived)
                   </div>
@@ -1141,7 +1144,7 @@ const server = Bun.serve({
               new TextEncoder().encode(dataStarPatchElementsString(jsx)),
             );
             controller.enqueue(
-              new TextEncoder().encode(renderAutoScrollScriptEvent()),
+              new TextEncoder().encode(renderAutoScrollScriptEvent(listId)),
             );
             lastPatchTs = Date.now();
             pendingPatch = false;
@@ -1417,9 +1420,8 @@ const server = Bun.serve({
                     type: "session.message.update",
                     count,
                     role: latest?.role,
-                    text: latest?.texts
-                      ? latest.texts.slice(-1)[0]
-                      : latest?.text || "",
+                    text:
+                      latest?.parts?.slice(-1)[0]?.text || latest?.text || "",
                   };
                   const synthetic = {
                     raw: "data: " + JSON.stringify(payload),

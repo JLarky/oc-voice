@@ -64,7 +64,7 @@ liftHtml("messages-wrapper", {
     let rafId = null;
     const scroll = () => {
       if (rafId !== null) cancelAnimationFrame(rafId);
-      const list2 = root.querySelector("#messages-list");
+      const list2 = root.querySelector('[id^="messages-list-"]');
       if (!list2) return;
       rafId = requestAnimationFrame(() => {
         rafId = null;
@@ -81,7 +81,7 @@ liftHtml("messages-wrapper", {
       characterData: true,
     });
     const resizeObs = new ResizeObserver(() => scroll());
-    const list = root.querySelector("#messages-list");
+    const list = root.querySelector('[id^="messages-list-"]');
     if (list) resizeObs.observe(list);
     else resizeObs.observe(root);
     const onWinResize = () => scroll();
@@ -246,7 +246,7 @@ liftHtml("speech-button", {
       const s = extractSummary() || "No summary yet.";
       speak(s);
     });
-    const list = document.getElementById("messages-list");
+    const list = document.querySelector('[id^="messages-list-"]');
     let obs = null;
     if (list) {
       obs = new MutationObserver(() => updateUIAndAuto());
