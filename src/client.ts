@@ -112,38 +112,62 @@ liftHtml("speech-button", {
       });
     }
     if (testBtn) {
-      testBtn.addEventListener("click", () => {
-        // Simple TTS: speak 'hi' without changing button or autoplay state.
+      testBtn.addEventListener('click', () => {
+        // Robust TTS test: speak 'hi' with logging & fallbacks; no UI changes.
+        const speakHi = () => {
+          try {
+            const utter = new SpeechSynthesisUtterance('hi');
+            const voices = speechSynthesis.getVoices();
+            const voice = voices.find(v => /en/i.test(v.lang)) || voices[0];
+            if (voice) utter.voice = voice;
+            utter.rate = 1; utter.pitch = 1; utter.volume = 1;
+            utter.onstart = () => console.log('[tts:test] onstart');
+            utter.onend = () => console.log('[tts:test] onend');
+            utter.onerror = (e) => console.warn('[tts:test] onerror', e);
+            speechSynthesis.speak(utter);
+            console.log('[tts:test] speakHi invoked', { voices: voices.length, speaking: speechSynthesis.speaking });
+          } catch (err) {
+            console.warn('[tts:test] speakHi failed, fallback beep', err);
+            beepFallback();
+          }
+        };
+        const beepFallback = () => {
+          try {
+            const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
+            const ctx = new Ctx();
+            const osc = ctx.createOscillator();
+            osc.type = 'sine'; osc.frequency.value = 660; osc.connect(ctx.destination); osc.start();
+            setTimeout(() => { try { osc.stop(); ctx.close(); } catch {}; }, 240);
+          } catch (e) { console.warn('[tts:test] audio fallback failed', e); }
+        };
         try {
-          if ("speechSynthesis" in window) {
-            // Do not cancel currently speaking summary unless necessary.
-            // If a summary is mid-speech, queue 'hi' after it.
-            const speakHi = () => {
-              const u = new SpeechSynthesisUtterance("hi");
-              const voices = speechSynthesis.getVoices();
-              const voice = voices.find(v => /en/i.test(v.lang)) || voices[0];
-              if (voice) u.voice = voice;
-              u.rate = 1; u.pitch = 1; u.volume = 1;
-              speechSynthesis.speak(u);
-            };
-            // If voices not loaded yet, wait for them.
-            if (speechSynthesis.getVoices().length === 0) {
-              const onVoices = () => { speechSynthesis.removeEventListener('voiceschanged', onVoices as any); speakHi(); };
-              speechSynthesis.addEventListener('voiceschanged', onVoices as any);
-              setTimeout(() => { speakHi(); }, 600); // fallback
-            } else {
+          if (!('speechSynthesis' in window)) { beepFallback(); return; }
+          // If already speaking, let current finish then queue hi.
+          if (speechSynthesis.speaking) {
+            console.log('[tts:test] already speaking, queuing hi after cancel');
+            try { speechSynthesis.cancel(); } catch {}
+          }
+          const voicesNow = speechSynthesis.getVoices();
+          console.log('[tts:test] initial voices', voicesNow.length);
+          if (voicesNow.length === 0) {
+            const voicesListener = () => {
+              speechSynthesis.removeEventListener('voiceschanged', voicesListener as any);
+              console.log('[tts:test] voiceschanged fired');
               speakHi();
-            }
+            };
+            speechSynthesis.addEventListener('voiceschanged', voicesListener as any);
+            // Fallback timeout if event doesn't fire.
+            setTimeout(() => {
+              console.log('[tts:test] voices timeout fallback');
+              speakHi();
+            }, 800);
             return;
           }
-        } catch {}
-        // Fallback: short beep if TTS unavailable.
-        try {
-          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-          const osc = ctx.createOscillator();
-          osc.type = 'sine'; osc.frequency.value = 660; osc.connect(ctx.destination); osc.start();
-          setTimeout(() => { try { osc.stop(); ctx.close(); } catch {}; }, 250);
-        } catch {}
+          speakHi();
+        } catch (err) {
+          console.warn('[tts:test] outer error, fallback beep', err);
+          beepFallback();
+        }
       });
     }
 
