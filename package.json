@@ -4,12 +4,13 @@
   "type": "module",
   "scripts": {
     "build": "bun build src/client.ts --outdir public",
-    "dev": "bun run --watch server.tsx",
+    "dev": "bun run --watch src/index.tsx",
     "watch": "bun build src/client.ts --outdir public --watch"
   },
   "dependencies": {
     "@lift-html/core": "^0.0.4",
     "@opencode-ai/sdk": "^0.15.16",
+    "elysia": "^1.4.13",
     "preact": "^10.27.2",
     "preact-render-to-string": "^6.6.3"
   },
