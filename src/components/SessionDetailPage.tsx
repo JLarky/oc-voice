@@ -57,7 +57,10 @@ export function SessionDetailPage(props: SessionDetailProps) {
           </submit-on-enter>
           <button type="submit">Send</button>
         </div>
-        <div id="session-message-result" className="result" />
+        <session-message-result
+          id="session-message-result"
+          className="result"
+        ></session-message-result>
       </form>
     </Layout>
   );

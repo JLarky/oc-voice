@@ -92,6 +92,87 @@ const advancedAggregatedStateBySession: Record<string, any> = {};
 const firstMessageSeen = new Set<string>();
 const inFlightFirstMessage: Record<string, boolean> = {};
 
+// Message send queue (fire-and-forget background processing)
+interface QueuedMessageJob {
+  ip: string;
+  sid: string;
+  text: string;
+  createdAt: number;
+  id: string;
+  attempts: number;
+  status: "pending" | "sending" | "failed" | "sent";
+  lastError?: string;
+  autoRetried?: boolean; // marks that an automatic retry was scheduled once
+}
+const queueJobsBySession: Record<string, QueuedMessageJob[]> = {};
+const messageSendQueue: QueuedMessageJob[] = []; // global FIFO (also stored per-session)
+let messageQueueActive = false;
+async function processMessageQueue() {
+  if (messageQueueActive) return;
+  messageQueueActive = true;
+  try {
+    while (messageSendQueue.length) {
+      const job = messageSendQueue.shift();
+      if (!job) break;
+      job.attempts++;
+      job.status = "sending";
+      const { ip, sid, text, createdAt } = job;
+      try {
+        console.log("Queue dispatch start", {
+          ip,
+          sid,
+          ageMs: Date.now() - createdAt,
+        });
+        const result = await rawSendMessage(resolveBaseUrl(ip), sid, text);
+        if (!result.ok) {
+          console.warn("Queue send failed", {
+            ip,
+            sid,
+            status: result.status,
+            error: result.error,
+          });
+          job.status = "failed";
+          job.lastError = (result.error || `status ${result.status}`) + "";
+          const aggKey = `${ip}::${sid}`;
+          const agg = advancedAggregatedStateBySession[aggKey];
+          if (agg) {
+            agg.summary = `(send failed: retry)`;
+            agg.actionFlag = false;
+          }
+        } else {
+          console.log("Queue send ok", { ip, sid });
+          job.status = "sent";
+          const aggKey2 = `${ip}::${sid}`;
+          const agg2 = advancedAggregatedStateBySession[aggKey2];
+          if (agg2 && agg2.summary === "(send failed: retry)") {
+            agg2.summary = "..."; // placeholder until summarizer recomputes
+          }
+        }
+      } catch (e) {
+        console.error("Queue send error", {
+          ip,
+          sid,
+          msg: (e as Error).message,
+        });
+        job.status = "failed";
+        job.lastError = (e as Error).message;
+        const aggKey3 = `${ip}::${sid}`;
+        const agg3 = advancedAggregatedStateBySession[aggKey3];
+        if (agg3) {
+          agg3.summary = `(send failed: retry)`;
+          agg3.actionFlag = false;
+        }
+      }
+      // Yield to event loop so we don't block
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  } finally {
+    messageQueueActive = false;
+  }
+}
+// Periodic queue processor (every 1s) and immediate trigger on push
+setInterval(() => processMessageQueue(), 1000);
+
 // Escape HTML
 import {
   escapeHtml,
@@ -1018,7 +1099,7 @@ const server = Bun.serve({
             const actionFlag = aggregatedState.actionFlag || false;
             const totalCount =
               aggregatedState.messageCount || recentMsgs.length;
-            const recentJsx = (
+            let recentJsx = (
               <AdvancedRecentMessages
                 messages={recentMsgs as any}
                 summaryText={summaryText}
@@ -1026,6 +1107,30 @@ const server = Bun.serve({
                 totalCount={totalCount}
               />
             );
+            if (summaryText === "(send failed: retry)") {
+              recentJsx = (
+                <div id="messages-list">
+                  <div style="font-size:.7rem;opacity:.6;margin-bottom:4px">
+                    recent messages (events-derived)
+                  </div>
+                  <MessageItems messages={recentMsgs as any} />
+                  <div
+                    class="messages-summary"
+                    style="opacity:.75;margin-top:4px"
+                  >
+                    send failed
+                    <form
+                      data-on:submit={`@post('/sessions/${ip}/${sid}/message/retry'); $messageText = ''`}
+                      style="display:inline;margin-left:8px"
+                    >
+                      <button type="submit" style="font-size:.65rem">
+                        retry last
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              );
+            }
             controller.enqueue(
               new TextEncoder().encode(dataStarPatchElementsString(statusJsx)),
             );
@@ -1558,26 +1663,59 @@ const server = Bun.serve({
             delete inFlightFirstMessage[sessionKey];
           }
           console.log("Message send start", { ip, sid, text, injected });
-          const result = await rawSendMessage(resolveBaseUrl(ip), sid, text);
-          if (!result.ok) {
-            const msg = escapeHtml(result.error || `HTTP ${result.status}`);
-            const errorJsx = (
-              <div id="session-message-result" class="result">
-                Error: {msg}
-              </div>
-            );
-            return new Response(dataStarPatchElementsString(errorJsx), {
-              headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-              status: result.status || 500,
+          // Queue-based send with automatic retry of last failed job (once) before new text
+          const queueKey = `${ip}::${sid}`;
+          const existingJobs =
+            queueJobsBySession[queueKey] || (queueJobsBySession[queueKey] = []);
+          // Find most recent failed job eligible for auto-retry (not yet autoRetried)
+          const failedForRetry = [...existingJobs]
+            .reverse()
+            .find((j) => j.status === "failed" && !j.autoRetried);
+          if (failedForRetry) {
+            const retryJob: QueuedMessageJob = {
+              ip,
+              sid,
+              text: failedForRetry.text,
+              createdAt: Date.now(),
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              attempts: 0,
+              status: "pending",
+              autoRetried: true,
+            };
+            messageSendQueue.push(retryJob);
+            existingJobs.push(retryJob);
+            failedForRetry.autoRetried = true; // mark original failed so we do only one auto retry
+            // Reset summary to placeholder if previously in failed state
+            const aggKey = `${ip}::${sid}`;
+            const agg = advancedAggregatedStateBySession[aggKey];
+            if (agg && agg.summary === "(send failed: retry)")
+              agg.summary = "...";
+            console.log("Auto-retry queued before new message", {
+              queueKey,
+              retryId: retryJob.id,
             });
           }
-          const joined = result.replyTexts.join("\n") || "(no reply)";
-          const escaped = escapeHtml(
-            joined.substring(0, 50) + (joined.length > 50 ? "..." : ""),
-          );
+          // Now enqueue new message job
+          const job: QueuedMessageJob = {
+            ip,
+            sid,
+            text,
+            createdAt: Date.now(),
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            attempts: 0,
+            status: "pending",
+          };
+          messageSendQueue.push(job);
+          existingJobs.push(job);
+          console.log("Message queued", {
+            queueKey,
+            length: messageSendQueue.length,
+          });
+          // Trigger background processing immediately (non-blocking)
+          processMessageQueue().catch(() => {});
           const replyJsx = (
             <div id="session-message-result" class="result">
-              Reply: {escaped}
+              Queued (jobs: {queueJobsBySession[queueKey].length})
             </div>
           );
           return new Response(dataStarPatchElementsString(replyJsx), {
@@ -1596,6 +1734,64 @@ const server = Bun.serve({
             status: 500,
           });
         }
+      }
+    }
+
+    // Retry last failed queued message: POST /sessions/:ip/:sid/message/retry
+    if (
+      url.pathname.startsWith("/sessions/") &&
+      url.pathname.endsWith("/message/retry") &&
+      req.method === "POST"
+    ) {
+      const parts = url.pathname.split("/").filter(Boolean); // ['sessions', ip, sid, 'message','retry']
+      if (
+        parts.length === 5 &&
+        parts[3] === "message" &&
+        parts[4] === "retry"
+      ) {
+        const ip = parts[1];
+        const sid = parts[2];
+        if (!ipStore.includes(ip))
+          return new Response("Unknown IP", { status: 404 });
+        const queueKey = `${ip}::${sid}`;
+        const jobs = queueJobsBySession[queueKey] || [];
+        // Find most recent failed job
+        const failed = [...jobs].reverse().find((j) => j.status === "failed");
+        if (!failed) {
+          const noFailJsx = (
+            <div id="session-message-result" class="result">
+              No failed job
+            </div>
+          );
+          return new Response(dataStarPatchElementsString(noFailJsx), {
+            headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+          });
+        }
+        // Requeue with same text new id
+        const newJob: QueuedMessageJob = {
+          ip,
+          sid,
+          text: failed.text,
+          createdAt: Date.now(),
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          attempts: 0,
+          status: "pending",
+        };
+        messageSendQueue.push(newJob);
+        jobs.push(newJob);
+        processMessageQueue().catch(() => {});
+        // Update aggregated state summary placeholder
+        const aggKey = `${ip}::${sid}`;
+        const agg = advancedAggregatedStateBySession[aggKey];
+        if (agg) agg.summary = "...";
+        const retryJsx = (
+          <div id="session-message-result" class="result">
+            Retry queued
+          </div>
+        );
+        return new Response(dataStarPatchElementsString(retryJsx), {
+          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+        });
       }
     }
 

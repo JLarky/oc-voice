@@ -60,7 +60,6 @@ export function SessionAdvancedPage(props: SessionAdvancedProps) {
           <div>(connecting events)</div>
         </div>
       </div>
-
     </Layout>
   );
 }
