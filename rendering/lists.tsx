@@ -11,7 +11,7 @@ interface SessionsUlProps {
   sessions: Session[];
   summarizerId?: string;
 }
-function SessionsUl({ ip, sessions, summarizerId }: SessionsUlProps) {
+export function SessionsUl({ ip, sessions, summarizerId }: SessionsUlProps) {
   if (!sessions.length)
     return (
       <ul id="sessions-ul">
@@ -23,10 +23,11 @@ function SessionsUl({ ip, sessions, summarizerId }: SessionsUlProps) {
       {sessions.map((s) => {
         const isSummarizer = summarizerId ? s.id === summarizerId : false;
         return (
-          <li style={isSummarizer ? 'opacity:.5' : undefined}>
+          <li style={isSummarizer ? "opacity:.5" : undefined}>
             <a href={`/sessions/${ip}/${s.id}`}>
               <span class="id">{s.id}</span>
-            </a> - {s.title || '(no title)'}{' '}
+            </a>{" "}
+            - {s.title || "(no title)"}{" "}
             <button
               style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px"
               data-on:click={`@post('/sessions/${ip}/${s.id}/delete-session')`}
@@ -40,15 +41,21 @@ function SessionsUl({ ip, sessions, summarizerId }: SessionsUlProps) {
   );
 }
 
-export function renderSessionsUl(ip: string, sessions: Session[], summarizerId?: string): string {
+export function renderSessionsUl(
+  ip: string,
+  sessions: Session[],
+  summarizerId?: string
+): string {
   // Rely on Preact escaping for id/title; ip validated upstream.
-  return render(<SessionsUl ip={ip} sessions={sessions} summarizerId={summarizerId} />);
+  return render(
+    <SessionsUl ip={ip} sessions={sessions} summarizerId={summarizerId} />
+  );
 }
 
 interface IpsUlProps {
   ips: string[];
 }
-function IpsUl({ ips }: IpsUlProps) {
+export function IpsUl({ ips }: IpsUlProps) {
   if (!ips.length)
     return (
       <ul id="ips-ul">

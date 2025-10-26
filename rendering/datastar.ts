@@ -1,3 +1,6 @@
+import { JSX } from "preact";
+import { render } from "preact-render-to-string";
+
 // datastar.ts - helpers for building Datastar SSE patches
 export function sendDatastarPatchElements(html: string): string {
   const lines = html.split("\n");
@@ -7,4 +10,8 @@ export function sendDatastarPatchElements(html: string): string {
   });
   result += "\n";
   return result;
+}
+
+export function dataStarPatchElementsString(jsx: JSX.Element): string {
+  return sendDatastarPatchElements(render(jsx));
 }

@@ -1,5 +1,6 @@
 // server.ts - Bun HTTP server serving index.html, bundled client, and API endpoints
 
+
 const port = 3000;
 
 import { rename } from "fs/promises";
@@ -86,26 +87,17 @@ const inFlightFirstMessage: Record<string, boolean> = {};
 // Escape HTML
 import {
   escapeHtml,
-  sendDatastarPatchElements,
   renderSessionDetailPage,
   renderSessionAdvancedPage,
   renderSessionsListPage,
 } from "./rendering";
 import {
-  renderStatusDiv,
-  renderResultDiv,
-  renderSessionCreateResult,
-  renderSessionDeleteResult,
-  renderSessionsClearedResult,
-  renderMessageReplyResult,
-  renderMessageErrorResult,
-  renderNoTextResult,
-  renderMessagesList,
   renderAutoScrollScriptEvent,
-  renderAdvancedSdkJson,
-  renderAdvancedInfo,
 } from "./rendering/fragments";
-import { renderSessionsUl, renderIpsUl } from "./rendering";
+
+import { dataStarPatchElementsString } from "./rendering/datastar";
+import { MessagesList, AdvancedSdkJson, AdvancedInfo, StatusDiv } from './rendering/fragments';
+import { IpsUl, SessionsUl } from "./rendering/lists";
 
 // Read persisted summarizer session id (if any) for highlighting; returns string or undefined
 async function readSummarizerId(): Promise<string | undefined> {
@@ -199,17 +191,28 @@ function sessionsSSE(ip: string): Response {
       async function push() {
         try {
           const list = await fetchSessionsFresh(ip);
-          const html = renderSessionsUl(ip, list, await readSummarizerId());
-          const statusHtml = renderStatusDiv(
-            "sessions-status",
-            `Updated ${new Date().toLocaleTimeString()}`
+          const statusJsx = (
+            <div id="sessions-status" class="status">
+              {`Updated ${new Date().toLocaleTimeString()}`}
+            </div>
+          );
+          const summarizerId = await readSummarizerId();
+          const listWrapperJsx = (
+            <div id="sessions-list">
+              <IpsUl ips={[]} />
+            </div>
+          ); // placeholder replaced below
+          const sessionsListJsx = (
+            <div id="sessions-list">
+              <SessionsUl ip={ip} sessions={list} summarizerId={summarizerId} />
+            </div>
           );
           try {
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(statusHtml))
+              new TextEncoder().encode(dataStarPatchElementsString(statusJsx))
             );
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(html))
+              new TextEncoder().encode(dataStarPatchElementsString(sessionsListJsx))
             );
           } catch (e) {
             if (interval) clearInterval(interval);
@@ -376,22 +379,25 @@ function messagesSSE(ip: string, sessionId: string): Response {
           const actionFlag = cacheAfter
             ? cacheAfter.action
             : /\|\s*action\s*=\s*yes/i.test(summaryText);
-          const html = renderMessagesList(
-            messageItems as any,
-            summaryText,
-            actionFlag,
-            totalCount
+          const statusJsx = (
+            <div id="messages-status" class="status">
+              {`Updated ${new Date().toLocaleTimeString()}`}
+            </div>
           );
-          const statusHtml = renderStatusDiv(
-            "messages-status",
-            `Updated ${new Date().toLocaleTimeString()}`
+          const listWrapperJsx = (
+            <MessagesList
+              messages={messageItems as any}
+              summaryText={summaryText}
+              actionFlag={actionFlag}
+              totalCount={totalCount}
+            />
           );
           try {
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(statusHtml))
+              new TextEncoder().encode(dataStarPatchElementsString(statusJsx))
             );
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(html))
+              new TextEncoder().encode(dataStarPatchElementsString(listWrapperJsx))
             );
             controller.enqueue(
               new TextEncoder().encode(renderAutoScrollScriptEvent())
@@ -428,17 +434,16 @@ function ipsSSE(): Response {
     async start(controller) {
       function build() {
         try {
-          const html = renderIpsUl(ipStore);
-          const statusHtml = renderStatusDiv(
-            "ips-status",
-            `Updated ${new Date().toLocaleTimeString()}`
+          const statusJsx = (
+            <StatusDiv id="ips-status" text={`Updated ${new Date().toLocaleTimeString()}`} />
           );
+          const ipsJsx = <IpsUl ips={ipStore} />;
           try {
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(statusHtml))
+              new TextEncoder().encode(dataStarPatchElementsString(statusJsx))
             );
             controller.enqueue(
-              new TextEncoder().encode(sendDatastarPatchElements(html))
+              new TextEncoder().encode(dataStarPatchElementsString(ipsJsx))
             );
           } catch (e) {
             if (interval) clearInterval(interval);
@@ -497,21 +502,19 @@ const server = Bun.serve({
         if (ip) ok = addIp(ip);
         if (ok) await persistIps();
         console.log("Add IP attempt", { raw: bodyText, parsedIp: ip, ok });
-        const resultHtml = renderResultDiv(
-          "add-ip-result",
-          ok ? `Added IP: ${escapeHtml(ip)}` : "Invalid or duplicate IP"
-        );
-        const listHtml = renderIpsUl(ipStore);
         const stream =
-          sendDatastarPatchElements(resultHtml) +
-          sendDatastarPatchElements(listHtml);
+          dataStarPatchElementsString(
+            <div id="add-ip-result" class="result">
+              {ok ? `Added IP: ${escapeHtml(ip)}` : "Invalid or duplicate IP"}
+            </div>
+          ) + dataStarPatchElementsString(<IpsUl ips={ipStore} />);
         return new Response(stream, {
           headers: { "Content-Type": "text/event-stream; charset=utf-8" },
         });
       } catch (e) {
         const msg = escapeHtml((e as Error).message);
-        const html = `<div id=\"add-ip-result\" class=\"result\">Error: ${msg}</div>`;
-        return new Response(sendDatastarPatchElements(html), {
+        const errorResultJsx = (<div id="add-ip-result" class="result">Error: {msg}</div>);
+        return new Response(dataStarPatchElementsString(errorResultJsx), {
           headers: { "Content-Type": "text/event-stream; charset=utf-8" },
           status: 500,
         });
@@ -548,27 +551,32 @@ const server = Bun.serve({
         if (ip) ok = removeIp(ip);
         if (ok) await persistIps();
         console.log("Remove IP attempt", { raw: bodyText, parsedIp: ip, ok });
-        const resultHtml = `<div id=\"add-ip-result\" class=\"result\">${
-          ok
-            ? "Removed IP: " + escapeHtml(ip)
-            : ip
-            ? "IP not found"
-            : "No IP provided"
-        }</div>`;
-        const listHtml = renderIpsUl(ipStore);
         const stream =
-          sendDatastarPatchElements(resultHtml) +
-          sendDatastarPatchElements(listHtml);
+          dataStarPatchElementsString(
+            <div id="add-ip-result" class="result">
+              {ok
+                ? "Removed IP: " + ip
+                : ip
+                ? "IP not found"
+                : "No IP provided"}
+            </div>
+          ) + dataStarPatchElementsString(<IpsUl ips={ipStore} />);
         return new Response(stream, {
           headers: { "Content-Type": "text/event-stream; charset=utf-8" },
         });
       } catch (e) {
-        const msg = escapeHtml((e as Error).message);
-        const html = `<div id=\"add-ip-result\" class=\"result\">Error: ${msg}</div>`;
-        return new Response(sendDatastarPatchElements(html), {
-          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-          status: 500,
-        });
+        const msg = (e as Error).message;
+        return new Response(
+          dataStarPatchElementsString(
+            <div id="add-ip-result" class="result">
+              Error: {msg}
+            </div>
+          ),
+          {
+            headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+            status: 500,
+          }
+        );
       }
     }
 
@@ -581,13 +589,12 @@ const server = Bun.serve({
         if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(ip)) ok = removeIp(ip);
         if (ok) await persistIps();
         console.log("Remove IP path attempt", { ip, ok });
-        const resultHtml = `<div id=\"add-ip-result\" class=\"result\">${
-          ok ? "Removed IP: " + escapeHtml(ip) : "IP not found"
-        }</div>`;
-        const listHtml = renderIpsUl(ipStore);
         const stream =
-          sendDatastarPatchElements(resultHtml) +
-          sendDatastarPatchElements(listHtml);
+          dataStarPatchElementsString(
+            <div id="add-ip-result" class="result">
+              {ok ? "Removed IP: " + ip : "IP not found"}
+            </div>
+          ) + dataStarPatchElementsString(<IpsUl ips={ipStore} />);
         return new Response(stream, {
           headers: { "Content-Type": "text/event-stream; charset=utf-8" },
         });
@@ -677,17 +684,24 @@ const server = Bun.serve({
             cachedSessionsByIp[ip] = { list: [entry], fetchedAt: now };
           }
 
-          const html = renderSessionCreateResult(ip, entry.id);
-          return new Response(sendDatastarPatchElements(html), {
+          const stream = dataStarPatchElementsString(
+            <div
+              id="create-session-result"
+              class="result"
+              data-init={`location.href='/sessions/${ip}/${entry.id}'`}
+            >
+              Created session: <a href={`/sessions/${ip}/${entry.id}`}>{entry.id}</a>
+            </div>
+          );
+          return new Response(stream, {
             headers: { "Content-Type": "text/event-stream; charset=utf-8" },
           });
         } catch (e) {
           const msg = escapeHtml((e as Error).message);
-          const html = renderResultDiv(
-            "create-session-result",
-            `Error: ${msg}`
+          const errorJsx = (
+            <div id="create-session-result" class="result">Error: {msg}</div>
           );
-          return new Response(sendDatastarPatchElements(html), {
+          return new Response(dataStarPatchElementsString(errorJsx), {
             headers: { "Content-Type": "text/event-stream; charset=utf-8" },
             status: 500,
           });
@@ -748,11 +762,19 @@ const server = Bun.serve({
         await fetchSessionsFresh(ip).catch(() => null);
         const cache = cachedSessionsByIp[ip];
         const list = cache?.list || [];
-        const listHtml = renderSessionsUl(ip, list, await readSummarizerId());
-        const resultHtml = renderSessionDeleteResult(sid, deletedOk);
         const stream =
-          sendDatastarPatchElements(resultHtml) +
-          sendDatastarPatchElements(listHtml);
+          dataStarPatchElementsString(
+            <div id="delete-session-result" class="result">
+              {deletedOk
+                ? `Deleted session: ${sid}`
+                : "Delete failed or session not found"}
+            </div>
+          ) +
+          dataStarPatchElementsString(
+            <div id="sessions-list">
+              <SessionsUl ip={ip} sessions={list} summarizerId={await readSummarizerId()} />
+            </div>
+          );
         return new Response(stream, {
           headers: { "Content-Type": "text/event-stream; charset=utf-8" },
           status: deletedOk ? 200 : 500,
@@ -827,15 +849,17 @@ const server = Bun.serve({
         await fetchSessionsFresh(ip).catch(() => null);
         const afterCache = cachedSessionsByIp[ip];
         const remainingList = afterCache?.list || [];
-        const listHtml = renderSessionsUl(
-          ip,
-          remainingList,
-          await readSummarizerId()
-        );
-        const resultHtml = renderSessionsClearedResult(deletedCount, total);
         const stream =
-          sendDatastarPatchElements(resultHtml) +
-          sendDatastarPatchElements(listHtml);
+          dataStarPatchElementsString(
+            <div id="delete-session-result" class="result">
+              {`Cleared sessions: ${deletedCount} / ${total}`}
+            </div>
+          ) +
+          dataStarPatchElementsString(
+            <div id="sessions-list">
+              <SessionsUl ip={ip} sessions={remainingList} summarizerId={await readSummarizerId()} />
+            </div>
+          );
         return new Response(stream, {
           headers: { "Content-Type": "text/event-stream; charset=utf-8" },
           status: 200,
@@ -968,8 +992,8 @@ const server = Bun.serve({
         };
         const jsonText = JSON.stringify(payload, null, 2);
         // Pass raw JSON; JSX will escape inside <textarea>
-        const html = renderAdvancedSdkJson(jsonText);
-        return new Response(sendDatastarPatchElements(html), {
+        const sdkJsonJsx = <AdvancedSdkJson jsonText={jsonText} />;
+        return new Response(dataStarPatchElementsString(sdkJsonJsx), {
           headers: { "Content-Type": "text/event-stream; charset=utf-8" },
         });
       }
@@ -1008,18 +1032,21 @@ const server = Bun.serve({
                 const msgs = await fetchMessages(ip, sid);
                 const approxCount = msgs.length; // simple count (could refine)
                 const displayTitle = sessionTitle || sid;
-                const infoHtml = renderAdvancedInfo(displayTitle, approxCount);
-                const statusHtml = renderStatusDiv(
-                  "advanced-status",
-                  `Updated ${new Date().toLocaleTimeString()}`
+                const statusJsx = (
+                  <div id="advanced-status" class="status">
+                    {`Updated ${new Date().toLocaleTimeString()}`}
+                  </div>
+                );
+                const infoWrapperJsx = (
+                  <AdvancedInfo title={displayTitle} approxCount={approxCount} />
                 );
                 controller.enqueue(
                   new TextEncoder().encode(
-                    sendDatastarPatchElements(statusHtml)
+                    dataStarPatchElementsString(statusJsx)
                   )
                 );
                 controller.enqueue(
-                  new TextEncoder().encode(sendDatastarPatchElements(infoHtml))
+                  new TextEncoder().encode(dataStarPatchElementsString(infoWrapperJsx))
                 );
               } catch (e) {
                 console.error("Advanced SSE push error", (e as Error).message);
@@ -1084,7 +1111,9 @@ const server = Bun.serve({
           }
           if (!text)
             return new Response(
-              sendDatastarPatchElements(renderNoTextResult()),
+              dataStarPatchElementsString(
+                <div id="session-message-result" class="result">No text</div>
+              ),
               {
                 headers: { "Content-Type": "text/event-stream; charset=utf-8" },
               }
@@ -1122,8 +1151,10 @@ const server = Bun.serve({
           const result = await rawSendMessage(resolveBaseUrl(ip), sid, text);
           if (!result.ok) {
             const msg = escapeHtml(result.error || `HTTP ${result.status}`);
-            const html = renderMessageErrorResult(msg);
-            return new Response(sendDatastarPatchElements(html), {
+            const errorJsx = (
+            <div id="session-message-result" class="result">Error: {msg}</div>
+          );
+        return new Response(dataStarPatchElementsString(errorJsx), {
               headers: { "Content-Type": "text/event-stream; charset=utf-8" },
               status: result.status || 500,
             });
@@ -1132,15 +1163,19 @@ const server = Bun.serve({
           const escaped = escapeHtml(
             joined.substring(0, 50) + (joined.length > 50 ? "..." : "")
           );
-          const html = renderMessageReplyResult(escaped);
-          return new Response(sendDatastarPatchElements(html), {
+          const replyJsx = (
+            <div id="session-message-result" class="result">Reply: {escaped}</div>
+          );
+          return new Response(dataStarPatchElementsString(replyJsx), {
             headers: { "Content-Type": "text/event-stream; charset=utf-8" },
           });
         } catch (e) {
           console.error("Message route error", (e as Error).message);
           const msg = escapeHtml((e as Error).message);
-          const html = renderMessageErrorResult(msg);
-          return new Response(sendDatastarPatchElements(html), {
+          const errorJsx = (
+            <div id="session-message-result" class="result">Error: {msg}</div>
+          );
+          return new Response(dataStarPatchElementsString(errorJsx), {
             headers: { "Content-Type": "text/event-stream; charset=utf-8" },
             status: 500,
           });

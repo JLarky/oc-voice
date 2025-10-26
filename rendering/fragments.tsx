@@ -1,6 +1,5 @@
 // fragments.tsx - small JSX helpers for HTML fragments previously in server.ts
 import { h } from "preact";
-import { render } from "preact-render-to-string";
 import { MessageItems, Msg } from "./MessageItems";
 
 interface StatusDivProps {
@@ -14,94 +13,7 @@ function StatusDiv({ id, text }: StatusDivProps) {
     </div>
   );
 }
-export function renderStatusDiv(id: string, text: string): string {
-  return render(<StatusDiv id={id} text={text} />);
-}
-
-interface ResultDivProps {
-  id: string;
-  text: string;
-}
-function ResultDiv({ id, text }: ResultDivProps) {
-  return (
-    <div id={id} class="result">
-      {text}
-    </div>
-  );
-}
-export function renderResultDiv(id: string, text: string): string {
-  return render(<ResultDiv id={id} text={text} />);
-}
-
-interface SessionCreateResultProps {
-  ip: string;
-  sessionId: string;
-}
-function SessionCreateResult({ ip, sessionId }: SessionCreateResultProps) {
-  return (
-    <div
-      id="create-session-result"
-      class="result"
-      data-init={`location.href='/sessions/${ip}/${sessionId}'`}
-    >
-      Created session: <a href={`/sessions/${ip}/${sessionId}`}>{sessionId}</a>
-    </div>
-  );
-}
-export function renderSessionCreateResult(
-  ip: string,
-  sessionId: string
-): string {
-  return render(<SessionCreateResult ip={ip} sessionId={sessionId} />);
-}
-
-export function renderSessionDeleteResult(
-  sessionId: string,
-  ok: boolean
-): string {
-  return render(
-    <div id="delete-session-result" class="result">
-      {ok
-        ? `Deleted session: ${sessionId}`
-        : "Delete failed or session not found"}
-    </div>
-  );
-}
-
-export function renderSessionsClearedResult(
-  deletedCount: number,
-  total: number
-): string {
-  return render(
-    <div
-      id="delete-session-result"
-      class="result"
-    >{`Cleared sessions: ${deletedCount} / ${total}`}</div>
-  );
-}
-
-export function renderMessageReplyResult(replyPreview: string): string {
-  return render(
-    <div
-      id="session-message-result"
-      class="result"
-    >{`Reply: ${replyPreview}`}</div>
-  );
-}
-
-export function renderMessageErrorResult(msg: string): string {
-  return render(
-    <div id="session-message-result" class="result">{`Error: ${msg}`}</div>
-  );
-}
-
-export function renderNoTextResult(): string {
-  return render(
-    <div id="session-message-result" class="result">
-      No text
-    </div>
-  );
-}
+export { StatusDiv };
 
 interface MessagesListProps {
   messages: Msg[];
@@ -135,21 +47,6 @@ function MessagesList({
     </div>
   );
 }
-export function renderMessagesList(
-  messages: Msg[],
-  summaryText: string,
-  actionFlag: boolean,
-  totalCount: number
-): string {
-  return render(
-    <MessagesList
-      messages={messages}
-      summaryText={summaryText}
-      actionFlag={actionFlag}
-      totalCount={totalCount}
-    />
-  );
-}
 
 // Advanced SDK JSON textarea fragment
 interface AdvancedSdkJsonProps {
@@ -169,10 +66,6 @@ function AdvancedSdkJson({ jsonText }: AdvancedSdkJsonProps) {
     </div>
   );
 }
-export function renderAdvancedSdkJson(jsonText: string): string {
-  return render(<AdvancedSdkJson jsonText={jsonText} />);
-}
-
 // Advanced info fragment (title + message count)
 interface AdvancedInfoProps {
   title: string;
@@ -185,9 +78,6 @@ function AdvancedInfo({ title, approxCount }: AdvancedInfoProps) {
     </div>
   );
 }
-export function renderAdvancedInfo(title: string, approxCount: number): string {
-  return render(<AdvancedInfo title={title} approxCount={approxCount} />);
-}
 
 // Auto-scroll script SSE event payload
 export function renderAutoScrollScriptEvent(): string {
@@ -196,3 +86,4 @@ export function renderAutoScrollScriptEvent(): string {
     "data: script (function(){var el=document.getElementById('messages-list');if(!el) return;if(!el.__observerAdded){var obs=new MutationObserver(function(muts){var last=el.querySelector('.message:last-child');if(last&&last.scrollIntoView){last.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;});obs.observe(el,{childList:true,subtree:true});el.__observerAdded=true;}var lastMsg=el.querySelector('.message:last-child');if(lastMsg&&lastMsg.scrollIntoView){lastMsg.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;})();\n\n"
   );
 }
+export { MessagesList, AdvancedInfo, AdvancedSdkJson };
