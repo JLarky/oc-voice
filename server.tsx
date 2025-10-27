@@ -1665,7 +1665,6 @@ const server = Bun.serve({
       });
     }
 
-
     return new Response("Not Found", { status: 404 });
   },
 });
