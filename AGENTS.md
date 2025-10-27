@@ -5,11 +5,6 @@ Entire repo (server, client, scripts).
 
 ## Build/Run
 - Dev: `bun run dev`
-- Build client: `bun run build` -> `public/client.js` (production artifact; dev uses dynamic route)
-- Watch client: `bun run watch`
-- Build/watch just sanity-check bundle; dynamic `/client.js` served on demand (no runtime dependency)
-- Dynamic client bundle served at `/client.js` via Elysia (always builds on request; ETag + 304 browser caching)
-- CLI: `bun run ask.ts "question"`
 
 ## Testing
 - Add `*.test.ts` beside code or in `tests/`
@@ -81,9 +76,8 @@ Entire repo (server, client, scripts).
 - Common patterns to explore: `client.session.list()`, raw HTTP endpoints for messages
 
 ## Pre-Commit Checklist
-- Always run tests: `bun test` (all must pass) or `mise run test:all` for tests + type-check
-- Build client bundle: `bun run build` (updates `public/client.js`) (production artifact; dynamic `/client.js` covers dev)
-- Format: `mise run format` (oxfmt) — run before committing; if unavailable, skip
+- Always run tests: `mise run test:all` for tests + type-check + format check and check that client code builds
+- Run `mise tasks` to run one task at a time.
 - Only proceed to `git commit` after all above succeed; even for doc-only changes run tests + build
 - Agent reminder: when asked to commit, execute tests, build, format (if available) first, then stage & commit
 
