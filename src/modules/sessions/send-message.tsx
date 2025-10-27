@@ -6,6 +6,7 @@ import {
   sendMessage as rawSendMessage,
   FIRST_MESSAGE_INSTRUCTION,
 } from "../../oc-client";
+import * as v from "valibot";
 
 // Ephemeral tracking for first-message injection (session scoped)
 const firstMessageSeen = new Set<string>();
@@ -17,112 +18,90 @@ function resolveBaseUrl(ip: string) {
 
 export const sendMessagePlugin = new Elysia({
   name: "sessions-send-message",
-}).post("/sessions/:ip/:sid/message", async function* ({ params, request }) {
-  const { ip, sid } = params as { ip: string; sid: string };
-  if (!ip || !sid || !(await doesIpExist(ip))) {
-    yield dataStarPatchElementsSSE(
-      <div id="session-message-status" class="status">
-        Unknown IP
-      </div>,
-    );
+}).post(
+  "/sessions/:ip/:sid/message",
+  async function* ({ params, body }) {
+    const { ip, sid } = params;
+    if (!ip || !sid || !(await doesIpExist(ip))) {
+      yield dataStarPatchElementsSSE(
+        <div id="session-message-result" class="result">
+          Error Invalid IP or session ID
+        </div>,
+      );
+      return;
+    }
+    let text = body.messagetext;
+    if (!text) {
+      yield dataStarPatchElementsSSE(
+        <div id="session-message-result" class="result">
+          No text
+        </div>,
+      );
+      return;
+    }
     yield dataStarPatchElementsSSE(
       <div id="session-message-result" class="result">
-        Error
+        Sending...
       </div>,
     );
-    return;
-  }
-  // Initial status patch
-  yield dataStarPatchElementsSSE(
-    <div id="session-message-status" class="status">
-      Sending...
-    </div>,
-  );
-  let bodyText = "";
-  try {
-    bodyText = await request.text();
-  } catch {}
-  let text = "";
-  if (bodyText) {
+    const sessionKey = sid;
+    let injected = false;
     try {
-      const parsed = JSON.parse(bodyText);
-      if (typeof parsed.messageText === "string" && parsed.messageText.trim())
-        text = parsed.messageText.trim();
-      else if (
-        typeof parsed.messagetext === "string" &&
-        parsed.messagetext.trim()
-      )
-        text = parsed.messagetext.trim();
-      else if (typeof parsed.text === "string" && parsed.text.trim())
-        text = parsed.text.trim();
-      else if (Array.isArray(parsed.parts)) {
-        const part = parsed.parts.find((p: any) => p?.type === "text");
-        if (part && typeof part.text === "string" && part.text.trim())
-          text = part.text.trim();
+      if (
+        !firstMessageSeen.has(sessionKey) &&
+        !inFlightFirstMessage[sessionKey]
+      ) {
+        inFlightFirstMessage[sessionKey] = true;
+        let existingCount = 0;
+        try {
+          const existing = await listMessages(resolveBaseUrl(ip), sid).catch(
+            () => [],
+          );
+          existingCount = existing.length;
+        } catch {}
+        if (existingCount === 0) {
+          text = FIRST_MESSAGE_INSTRUCTION + "\n\n" + text;
+          injected = true;
+        }
+        firstMessageSeen.add(sessionKey);
+        delete inFlightFirstMessage[sessionKey];
       }
     } catch {
-      /* ignore */
-    }
-  }
-  if (!text) {
-    yield dataStarPatchElementsSSE(
-      <div id="session-message-result" class="result">
-        No text
-      </div>,
-    );
-    return;
-  }
-  const sessionKey = sid;
-  let injected = false;
-  try {
-    if (
-      !firstMessageSeen.has(sessionKey) &&
-      !inFlightFirstMessage[sessionKey]
-    ) {
-      inFlightFirstMessage[sessionKey] = true;
-      let existingCount = 0;
-      try {
-        const existing = await listMessages(resolveBaseUrl(ip), sid).catch(
-          () => [],
-        );
-        existingCount = existing.length;
-      } catch {}
-      if (existingCount === 0) {
-        text = FIRST_MESSAGE_INSTRUCTION + "\n\n" + text;
-        injected = true;
-      }
-      firstMessageSeen.add(sessionKey);
       delete inFlightFirstMessage[sessionKey];
     }
-  } catch {
-    delete inFlightFirstMessage[sessionKey];
-  }
-  console.log("Elysia message send start", { ip, sid, text, injected });
-  const result = await rawSendMessage(resolveBaseUrl(ip), sid, text);
-  if (!result.ok) {
-    const msg = result.error || `HTTP ${result.status}`;
-    yield dataStarPatchElementsSSE(
-      <div id="session-message-status" class="status">
-        Failed
-      </div>,
-    );
     yield dataStarPatchElementsSSE(
       <div id="session-message-result" class="result">
-        Error: {msg}
+        Added to queue...
       </div>,
     );
-    return;
-  }
-  const joined = result.replyTexts.join("\n") || "(no reply)";
-  const truncated = joined.substring(0, 50) + (joined.length > 50 ? "..." : "");
-  yield dataStarPatchElementsSSE(
-    <div id="session-message-status" class="status">
-      Done
-    </div>,
-  );
-  yield dataStarPatchElementsSSE(
-    <div id="session-message-result" class="result">
-      Reply: {truncated}
-    </div>,
-  );
-});
+    let failed = "";
+    (async () => {
+      const result = await rawSendMessage(resolveBaseUrl(ip), sid, text);
+      if (!result.ok) {
+        failed = result.error || `HTTP ${result.status}`;
+        console.error("Message send error", failed);
+      }
+    })();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    if (failed) {
+      yield dataStarPatchElementsSSE(
+        <div id="session-message-result" class="result">
+          Error: {failed}
+        </div>,
+      );
+    } else {
+      yield dataStarPatchElementsSSE(
+        <div id="session-message-result" class="result"></div>,
+      );
+    }
+  },
+  {
+    params: v.object({
+      ip: v.string(),
+      sid: v.string(),
+    }),
+    body: v.object({
+      messagetext: v.string(),
+    }),
+  },
+);
