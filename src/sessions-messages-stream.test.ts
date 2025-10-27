@@ -10,6 +10,23 @@ describe("sessions messages SSE stream", () => {
   test("returns event-stream with datastar patch events", async () => {
     // Add IP so handler does not early-return Unknown IP
     addIp("1.2.3.4");
+
+    // Mock fetch for listMessages and summarizeMessages
+    // @ts-ignore
+    global.fetch = async (url: string) => {
+      if (url.includes("/session/") && url.includes("/message")) {
+        // listMessages call
+        return {
+          ok: true,
+          json: async () => [],
+        };
+      }
+      return {
+        ok: false,
+        json: async () => ({}),
+      };
+    };
+
     const app = new Elysia().use(sessionsPlugin);
     const controller = new AbortController();
     const url = "http://localhost/sessions/1.2.3.4/abc/messages/stream";

@@ -3,6 +3,7 @@ import { Elysia } from "elysia";
 import { sendMessagePlugin } from "./modules/sessions/send-message";
 import { addIp } from "./utils/store-ips";
 import { FIRST_MESSAGE_INSTRUCTION } from "./oc-client";
+import { subscribe, __resetSessionManagers } from "./modules/sessions/pubsub";
 
 function mockFetchSequence(
   responses: Array<{ ok: boolean; status?: number; json?: any }>,
@@ -27,8 +28,9 @@ function mockFetchSequence(
 }
 
 describe("sendMessagePlugin", () => {
-  it("injects first message instruction and returns SSE patch", async () => {
+  it("injects first message instruction and publishes to effect/stream", async () => {
     addIp("127.0.0.1");
+    __resetSessionManagers();
     const bodies: string[] = [];
     mockFetchSequence(
       [
@@ -40,24 +42,45 @@ describe("sendMessagePlugin", () => {
       ],
       bodies,
     );
+    const cacheKey = "http://127.0.0.1:2000::sess-abc";
+
+    // Set up subscription to capture published elements
+    const publishedElements: string[] = [];
+    const unsubscribe = subscribe(cacheKey, (message) => {
+      if (message.type === "publish-element") {
+        // Convert element to string for testing
+        publishedElements.push(JSON.stringify(message.element));
+      }
+    });
+
     const app = new Elysia().use(sendMessagePlugin);
     const req = new Request(
       "http://localhost/sessions/127.0.0.1/sess-abc/message",
       {
         method: "POST",
-        body: JSON.stringify({ text: "Hello world" }),
+        body: JSON.stringify({ messagetext: "Hello world" }),
+        headers: {
+          "Content-Type": "application/json",
+        },
       },
     );
     const res = await app.handle(req);
     const txt = await res.text();
-    expect(txt.includes("event: datastar-patch-elements")).toBe(true);
-    expect(txt.includes("Reply:")).toBe(true);
+
+    // Message endpoint yields SSE responses
+    expect(txt).toContain("event: datastar-patch-elements");
+    expect(txt).toContain("Sending...");
+
     // Check that POST body had injection
-    const postBody = bodies.find((b) => b.includes("/session/")); // not reliable path marker
-    // Bodies captured are raw JSON payloads; second call is the POST
-    const second = bodies[bodies.length - 1];
-    const parsed = JSON.parse(second);
+    const postBody = bodies.find((b) => b.includes("parts"));
+    expect(postBody).toBeDefined();
+    const parsed = JSON.parse(postBody!);
     const sentText = parsed.parts[0].text as string;
     expect(sentText.startsWith(FIRST_MESSAGE_INSTRUCTION)).toBe(true);
+
+    // Verify published element was captured (from publishElementToStreams)
+    expect(publishedElements.length > 0).toBe(true);
+
+    unsubscribe();
   });
 });
