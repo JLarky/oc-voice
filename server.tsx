@@ -715,7 +715,7 @@ const server = Bun.serve({
         });
       }
     }
-    // Deprecated messages SSE endpoint removed; use /sessions/:ip/:sid/advanced/events/stream instead.
+    // Deprecated legacy messages SSE replaced: use /sessions/:ip/:sid/messages/stream for detail view; advanced page continues using /sessions/:ip/:sid/advanced/events/stream.
 
     // Advanced raw JSON endpoint removed (manual fetch disabled)
 
@@ -827,6 +827,164 @@ const server = Bun.serve({
         const sdkJsonJsx = <AdvancedSdkJson jsonText={jsonText} />;
         return new Response(dataStarPatchElementsString(sdkJsonJsx), {
           headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+        });
+      }
+    }
+
+    // Messages SSE (detail page focused): /sessions/:ip/:sid/messages/stream
+    if (
+      url.pathname.startsWith("/sessions/") &&
+      url.pathname.endsWith("/messages/stream")
+    ) {
+      const parts = url.pathname.split("/").filter(Boolean); // ['sessions', ip, sid, 'messages','stream']
+      if (
+        parts.length === 5 &&
+        parts[3] === "messages" &&
+        parts[4] === "stream"
+      ) {
+        const ip = parts[1];
+        const sid = parts[2];
+        if (!doesIpExist(ip)) return new Response("Unknown IP", { status: 404 });
+        const cacheKey = `${ip}::${sid}`;
+        let lastCount = 0;
+        let lastSummary = "";
+        let interval: ReturnType<typeof setInterval> | undefined;
+        const stream = new ReadableStream({
+          async start(controller) {
+            async function push() {
+              try {
+                const msgs = await fetchMessages(ip, sid);
+                const count = msgs.length;
+                const trimmed = count > 50 ? msgs.slice(-50) : msgs;
+                // Recent messages list JSX (reuse AdvancedRecentMessages for consistency)
+                // Build summary using existing summary cache logic but simplified
+                const recentForHash = msgs.slice(-3).map((m: any) => ({
+                  role: m.role || "message",
+                  text: (m.parts?.[0]?.text || m.text || "").replace(/\s+/g, " ").trim(),
+                }));
+                const cached = summaryCacheBySession[cacheKey];
+                const { hash: recentHash, reuse } = shouldReuseSummary(
+                  cached?.messageHash,
+                  recentForHash,
+                );
+                let summaryText = "(no recent messages)";
+                if (count === 0) {
+                  summaryText = "(no recent messages)";
+                } else if (reuse && cached) {
+                  summaryText = cached.summary;
+                } else {
+                  summaryText = "...";
+                  const lastRole = msgs[msgs.length - 1]?.role || "";
+                  const shouldSummarize = lastRole === "assistant";
+                  if (shouldSummarize && !inFlightSummary[cacheKey]) {
+                    inFlightSummary[cacheKey] = true;
+                    setTimeout(async () => {
+                      try {
+                        const remoteBase = resolveBaseUrl(ip);
+                        const { summarizeMessages } = await import("./src/oc-client");
+                        const summ = await summarizeMessages(
+                          remoteBase,
+                          recentForHash,
+                          sid,
+                        );
+                        if (summ.ok) {
+                          summaryCacheBySession[cacheKey] = {
+                            messageHash: recentHash,
+                            summary: summ.summary || "(empty summary)",
+                            action: summ.action,
+                            cachedAt: Date.now(),
+                          };
+                        } else {
+                          summaryCacheBySession[cacheKey] = {
+                            messageHash: recentHash,
+                            summary: "(summary failed)",
+                            action: false,
+                            cachedAt: Date.now(),
+                          };
+                        }
+                      } catch {
+                        summaryCacheBySession[cacheKey] = {
+                          messageHash: recentHash,
+                          summary: "(summary failed)",
+                          action: false,
+                          cachedAt: Date.now(),
+                        };
+                      } finally {
+                        const entry = summaryCacheBySession[cacheKey];
+                        lastSummary = entry.summary;
+                        delete inFlightSummary[cacheKey];
+                        // Push updated summary fragment
+                        try {
+                          const statusJsx = (
+                            <div id="messages-status" class="status">{`Updated ${new Date().toLocaleTimeString()}`}</div>
+                          );
+                          const recentJsx = (
+                            <AdvancedRecentMessages
+                              messages={trimmed as any}
+                              summaryText={entry.summary}
+                              actionFlag={entry.action}
+                              totalCount={count}
+                            />
+                          );
+                          controller.enqueue(
+                            new TextEncoder().encode(
+                              dataStarPatchElementsString(statusJsx),
+                            ),
+                          );
+                          controller.enqueue(
+                            new TextEncoder().encode(
+                              dataStarPatchElementsString(recentJsx),
+                            ),
+                          );
+                          controller.enqueue(
+                            new TextEncoder().encode(renderAutoScrollScriptEvent()),
+                          );
+                        } catch {}
+                      }
+                    }, SUMMARY_DEBOUNCE_MS);
+                  }
+                }
+                const actionFlag = summaryCacheBySession[cacheKey]?.action || false;
+                const statusJsx = (
+                  <div id="messages-status" class="status">{`Updated ${new Date().toLocaleTimeString()}`}</div>
+                );
+                const recentJsx = (
+                  <AdvancedRecentMessages
+                    messages={trimmed as any}
+                    summaryText={summaryText}
+                    actionFlag={actionFlag}
+                    totalCount={count}
+                  />
+                );
+                controller.enqueue(
+                  new TextEncoder().encode(dataStarPatchElementsString(statusJsx)),
+                );
+                controller.enqueue(
+                  new TextEncoder().encode(dataStarPatchElementsString(recentJsx)),
+                );
+                controller.enqueue(
+                  new TextEncoder().encode(renderAutoScrollScriptEvent()),
+                );
+                lastCount = count;
+                lastSummary = summaryText;
+              } catch (e) {
+                console.error("Messages SSE push error", (e as Error).message);
+              }
+            }
+            await push();
+            interval = setInterval(push, 2000);
+          },
+          cancel() {
+            if (interval) clearInterval(interval);
+          },
+        });
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache, no-transform",
+            Connection: "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+          },
         });
       }
     }

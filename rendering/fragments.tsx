@@ -143,7 +143,7 @@ function AdvancedRecentMessages({
   return (
     <div id="messages-list">
       <div style="font-size:.7rem;opacity:.6;margin-bottom:4px">
-        recent messages (events-derived)
+        recent messages
       </div>
       <MessageItems messages={messages} />
       {typeof totalCount === "number" && totalCount > 0 && summaryText && (
