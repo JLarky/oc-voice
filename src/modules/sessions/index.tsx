@@ -6,6 +6,7 @@ import { doesIpExist } from "../../utils/store-ips";
 import { listMessages } from "../../oc-client";
 import { shouldReuseSummary } from "../../hash";
 import { Msg } from "./session-manager";
+import { buildCacheKey, remoteBaseFromIp } from './cache-key';
 
 export const sessionsPlugin = new Elysia({ name: "sessions-messages" }).get(
   "/sessions/:ip/:sid/messages/stream",
@@ -19,14 +20,14 @@ export const sessionsPlugin = new Elysia({ name: "sessions-messages" }).get(
       );
       return;
     }
-    const cacheKey = `${ip}::${sid}`;
+    const cacheKey = buildCacheKey(ip, sid);
     let lastHash = "";
     let lastSummary = "";
     let lastAction = false;
     // Simple loop (2s cadence) until aborted
     while (!request.signal.aborted) {
       try {
-        const base = `http://${ip}:2000`;
+        const base = remoteBaseFromIp(ip);
         let msgs: Msg[] = [];
         try {
           const textMessages = await listMessages(base, sid);

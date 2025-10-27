@@ -115,7 +115,7 @@ export function stopTimer(): void {
 
 /**
  * Subscribe to typed session messages
- * @param cacheKey Session identifier (e.g., "http://192.168.1.1:2000::session-123")
+ * @param cacheKey Session identifier (e.g., "192.168.1.1::session-123")
  * @param handler Callback that receives typed messages
  * @returns Unsubscribe function to clean up listener
  *

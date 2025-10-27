@@ -11,6 +11,7 @@ import {
   getSessionCurrentState,
 } from "./pubsub";
 import { createSessionManager, buildFragments, Msg } from "./session-manager";
+import { buildCacheKey, remoteBaseFromIp } from './cache-key';
 
 export const effectSessionsPlugin = new Elysia({
   name: "sessions-effect-stream",
@@ -20,8 +21,8 @@ export const effectSessionsPlugin = new Elysia({
     const { ip, sid } = params;
     if (!ip || !sid || !(await doesIpExist(ip)))
       return new Response("Unknown IP", { status: 404 });
-    const remoteBase = `http://${ip}:2000`;
-    const cacheKey = remoteBase + "::" + sid;
+    const remoteBase = remoteBaseFromIp(ip);
+    const cacheKey = buildCacheKey(ip, sid);
     startTimer();
 
     const encoder = new TextEncoder();

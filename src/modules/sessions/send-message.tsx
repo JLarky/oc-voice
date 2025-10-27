@@ -13,9 +13,7 @@ import * as v from "valibot";
 const firstMessageSeen = new Set<string>();
 const inFlightFirstMessage: Record<string, boolean> = {};
 
-function resolveBaseUrl(ip: string) {
-  return `http://${ip}:2000`;
-}
+import { buildCacheKey, remoteBaseFromIp } from './cache-key';
 
 export const sendMessagePlugin = new Elysia({
   name: "sessions-send-message",
@@ -31,7 +29,7 @@ export const sendMessagePlugin = new Elysia({
       );
       return;
     }
-    const cacheKey = resolveBaseUrl(ip) + "::" + sid;
+    const cacheKey = buildCacheKey(ip, sid);
     let text = body.messagetext;
     if (!text) {
       yield dataStarPatchElementsSSE(
@@ -56,7 +54,7 @@ export const sendMessagePlugin = new Elysia({
         inFlightFirstMessage[sessionKey] = true;
         let existingCount = 0;
         try {
-          const existing = await listMessages(resolveBaseUrl(ip), sid).catch(
+          const existing = await listMessages(remoteBaseFromIp(ip), sid).catch(
             () => [],
           );
           existingCount = existing.length;
@@ -79,7 +77,7 @@ export const sendMessagePlugin = new Elysia({
     );
     let failed = "";
     (async () => {
-      const result = await rawSendMessage(resolveBaseUrl(ip), sid, text);
+      const result = await rawSendMessage(remoteBaseFromIp(ip), sid, text);
       if (!result.ok) {
         failed = result.error || `HTTP ${result.status}`;
         publishElementToStreams(

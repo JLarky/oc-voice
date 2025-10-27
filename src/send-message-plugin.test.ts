@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+import { buildCacheKey } from './modules/sessions/cache-key';
 import { Elysia } from "elysia";
 import { sendMessagePlugin } from "./modules/sessions/send-message";
 import { addIp } from "./utils/store-ips";
@@ -42,7 +43,7 @@ describe("sendMessagePlugin", () => {
       ],
       bodies,
     );
-    const cacheKey = "http://127.0.0.1:2000::sess-abc";
+    const cacheKey = buildCacheKey("127.0.0.1", "sess-abc");
 
     // Set up subscription to capture published elements
     const publishedElements: string[] = [];
