@@ -1,6 +1,4 @@
-// ============================================================================
-// Typed Messages
-// ============================================================================
+import { JSX } from "preact";
 
 /**
  * SessionMessage is a discriminated union of all possible message types
@@ -29,12 +27,91 @@
  * //   }
  * // });
  */
-export type SessionMessage = { type: "updated-at"; time: Date };
+export type SessionMessage =
+  | { type: "updated-at"; time: Date }
+  | { type: "publish-element"; element: JSX.Element };
 
 export type SessionMessageHandler = (message: SessionMessage) => void;
 
 const subscriptions = new Map<string, SessionMessageHandler[]>();
 let globalTimer: NodeJS.Timeout | null = null;
+
+// Session managers - one per unique session to share logic across multiple streams
+export const sessionManagers = new Map<
+  string,
+  {
+    dispose: () => void;
+  }
+>();
+
+/**
+ * Register a session manager for a specific session
+ * The manager is responsible for shared logic (polling, summarization, etc.)
+ * Call the returned dispose function when cleaning up
+ */
+export function registerSessionManager(
+  cacheKey: string,
+  dispose: () => void,
+): void {
+  if (!sessionManagers.has(cacheKey)) {
+    sessionManagers.set(cacheKey, { dispose });
+  }
+}
+
+/**
+ * Unregister a session manager when all streams have disconnected
+ */
+export function unregisterSessionManager(cacheKey: string): void {
+  const manager = sessionManagers.get(cacheKey);
+  if (manager) {
+    manager.dispose();
+    sessionManagers.delete(cacheKey);
+  }
+}
+
+/**
+ * FOR TESTING ONLY: Clear all session managers
+ */
+export function __resetSessionManagers(): void {
+  for (const manager of sessionManagers.values()) {
+    manager.dispose();
+  }
+  sessionManagers.clear();
+}
+
+/**
+ * Get the replay buffer for a session (recent published elements)
+ * Returns all buffered elements so new streams can catch up
+ */
+export function getSessionReplayBuffer(cacheKey: string): JSX.Element[] {
+  const manager = sessionManagers.get(cacheKey);
+  if (manager && (manager as any).__replayBuffer) {
+    return [...(manager as any).__replayBuffer];
+  }
+  return [];
+}
+
+/**
+ * Start the global timer that broadcasts "updated-at" messages every 2 seconds
+ * Must be called explicitly to start publishing updates
+ */
+export function startTimer(): void {
+  if (!globalTimer) {
+    globalTimer = setInterval(() => {
+      publishToSession(undefined, { type: "updated-at", time: new Date() });
+    }, 2000);
+  }
+}
+
+/**
+ * Stop the global timer
+ */
+export function stopTimer(): void {
+  if (globalTimer) {
+    clearInterval(globalTimer);
+    globalTimer = null;
+  }
+}
 
 /**
  * Subscribe to typed session messages
@@ -42,9 +119,7 @@ let globalTimer: NodeJS.Timeout | null = null;
  * @param handler Callback that receives typed messages
  * @returns Unsubscribe function to clean up listener
  *
- * Automatically manages global timer:
- * - Starts when first subscriber joins
- * - Stops when last subscriber leaves
+ * Note: You must call startTimer() separately to begin broadcasting messages
  *
  * @example
  * const unsubscribe = subscribe(cacheKey, (msg) => {
@@ -63,13 +138,6 @@ export function subscribe(
   }
   subscriptions.get(cacheKey)!.push(handler);
 
-  // Start global timer if this is the first subscription
-  if (!globalTimer) {
-    globalTimer = setInterval(() => {
-      publishToSession(undefined, { type: "updated-at", time: new Date() });
-    }, 2000);
-  }
-
   // Return unsubscribe function
   return () => {
     const handlers = subscriptions.get(cacheKey);
@@ -83,10 +151,9 @@ export function subscribe(
       }
     }
 
-    // Stop global timer if no more subscribers remain
-    if (subscriptions.size === 0 && globalTimer) {
-      clearInterval(globalTimer);
-      globalTimer = null;
+    // Stop timer if no more subscribers remain
+    if (subscriptions.size === 0) {
+      stopTimer();
     }
   };
 }
@@ -115,4 +182,36 @@ export function publishToSession(
       }
     }
   }
+}
+
+/**
+ * Publish an element (JSX/HTML string) to be rendered in all streams of a session
+ * This is called by session managers to push updates to connected streams
+ */
+export function publishElementToStreams(
+  cacheKey: string,
+  element: JSX.Element,
+): void {
+  const handlers = subscriptions.get(cacheKey);
+  if (handlers) {
+    for (const handler of handlers) {
+      // Create a custom message-like structure that handlers can recognize
+      // Handlers should check if the message has the element string
+      handler({ type: "publish-element", element });
+    }
+  }
+}
+
+/**
+ * Get the current state for a session so new streams can render fresh data
+ * Returns messages and summary at connection time
+ */
+export function getSessionCurrentState(
+  cacheKey: string,
+): { msgs: any[]; summary: any } | null {
+  const manager = sessionManagers.get(cacheKey);
+  if (manager && (manager as any).__getCurrentState) {
+    return (manager as any).__getCurrentState();
+  }
+  return null;
 }
