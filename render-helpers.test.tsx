@@ -84,7 +84,7 @@ describe("renderSessionDetailPage", () => {
     });
     expect(html).toContain("&lt;bad");
     expect(html).not.toContain("<bad>");
-    expect(html).toContain("@get('/sessions/1.2.3.4/sess123/messages/stream')");
+    expect(html).toContain("@get('/sessions/1.2.3.4/sess123/effect/stream')");
     expect(
       html.startsWith(
         '<!doctype html><html lang="en"><head><meta charset="UTF-8"/>',
