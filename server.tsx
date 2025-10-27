@@ -32,10 +32,13 @@ function removeIp(ip: string) {
 const IP_STORE_FILE = "ip-store.json";
 // Unstorage-backed persistence (legacy file migration)
 const storage = createStorage({ driver: fsDriver({ base: "." }) });
+const STORAGE_IPS_KEY_NEW = 'storage/ips.json';
+const STORAGE_IPS_KEY_OLD = 'ips';
 async function loadIps() {
   try {
-    // Primary: read from storage key
-    const stored = await storage.getItem("ips");
+    // Primary: read from new storage key then fallback to old key
+    const primary = await storage.getItem(STORAGE_IPS_KEY_NEW);
+    const stored = primary ?? await storage.getItem(STORAGE_IPS_KEY_OLD);
     if (stored) {
       const candidate = Array.isArray(stored)
         ? stored
@@ -70,8 +73,9 @@ async function loadIps() {
     }
     // Persist migrated value to storage (best effort)
     try {
-      await storage.setItem("ips", [...ipStore]);
-      console.log("Migrated legacy ip-store.json to unstorage");
+      await storage.setItem(STORAGE_IPS_KEY_NEW, [...ipStore]);
+      await storage.setItem(STORAGE_IPS_KEY_OLD, [...ipStore]);
+      console.log("Migrated legacy ip-store.json to unstorage (new + old key)");
     } catch (e2) {
       console.warn("migration write failed", (e2 as Error).message);
     }
@@ -81,8 +85,9 @@ async function loadIps() {
 }
 async function persistIps() {
   try {
-    await storage.setItem("ips", [...ipStore]);
-    console.log("Persist ips stored", { count: ipStore.length });
+    await storage.setItem(STORAGE_IPS_KEY_NEW, [...ipStore]);
+    await storage.setItem(STORAGE_IPS_KEY_OLD, [...ipStore]);
+    console.log("Persist ips stored (new + old keys)", { count: ipStore.length });
   } catch (e) {
     console.error("Persist ips storage failed", (e as Error).message);
     // Fallback: direct legacy file write (non-atomic)
