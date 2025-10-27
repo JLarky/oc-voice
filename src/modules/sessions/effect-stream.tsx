@@ -5,6 +5,7 @@ import { dataStarPatchElementsString } from "../../../rendering/datastar";
 import { doesIpExist } from "../../utils/store-ips";
 import { listMessages, summarizeMessages } from "../../oc-client";
 import { shouldReuseSummary } from "../../hash";
+import { subscribe } from "./pubsub";
 
 interface Msg {
   role: string;
@@ -119,24 +120,17 @@ export const effectSessionsPlugin = new Elysia({
     }),
   );
 
-  // Ping every 2 seconds to keep connection alive
-  Effect.runFork(
-    Effect.sync(() => {
-      const interval = setInterval(() => {
-        if (aborted) {
-          clearInterval(interval);
-          return;
-        }
-        const status = (
-          <div
-            id="messages-status"
-            className="status"
-          >{`Updated ${new Date().toLocaleTimeString()}`}</div>
-        );
-        queue.push(dataStarPatchElementsString(status));
-      }, 2000);
-    }),
-  );
+  // Ping every 2 seconds to keep connection alive (via pub/sub)
+  let unsubscribePing: (() => void) | null = null;
+  unsubscribePing = subscribe(cacheKey, () => {
+    const status = (
+      <div
+        id="messages-status"
+        className="status"
+      >{`Updated ${new Date().toLocaleTimeString()}`}</div>
+    );
+    queue.push(dataStarPatchElementsString(status));
+  });
 
   const SUMMARY_DEBOUNCE_MS = 1500; // silence until assistant messages settle
   const MIN_SUMMARY_INTERVAL_MS = 5000; // hard minimum gap between summaries
@@ -241,11 +235,13 @@ export const effectSessionsPlugin = new Elysia({
     },
     cancel() {
       aborted = true;
+      if (unsubscribePing) unsubscribePing();
     },
   });
 
   request.signal.addEventListener("abort", () => {
     aborted = true;
+    if (unsubscribePing) unsubscribePing();
   });
 
   return new Response(stream, {
