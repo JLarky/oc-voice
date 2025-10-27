@@ -14,6 +14,10 @@ declare module "preact" {
         style?: preact.JSX.CSSProperties;
         [key: string]: any;
       };
+      "session-message-result": {
+        children?: preact.ComponentChildren;
+        [key: string]: any;
+      };
     }
   }
 }

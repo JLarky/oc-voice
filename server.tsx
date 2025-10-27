@@ -215,6 +215,7 @@ import {
   AdvancedEvents,
   AdvancedRecentMessages,
 } from "./rendering/fragments";
+import { MessageItems } from "./rendering/MessageItems";
 import { IpsUl, SessionsUl } from "./rendering/lists";
 import { doesIpExist, getIpStore, loadIps } from "./src/utils/store-ips";
 
@@ -1400,9 +1401,8 @@ const server = Bun.serve({
                     type: "session.message.update",
                     count,
                     role: latest?.role,
-                    text: latest?.texts
-                      ? latest.texts.slice(-1)[0]
-                      : latest?.text || "",
+                    text:
+                      latest?.parts?.slice(-1)[0]?.text || latest?.text || "",
                   };
                   const synthetic = {
                     raw: "data: " + JSON.stringify(payload),
