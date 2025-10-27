@@ -1,8 +1,5 @@
 import { Elysia } from "elysia";
-import {
-  dataStarPatchElementsSSE,
-  dataStarPatchElementsString,
-} from "../../../rendering/datastar";
+import { dataStarPatchElementsSSE } from "../../../rendering/datastar";
 import { doesIpExist } from "../../utils/store-ips";
 import {
   listMessages,
@@ -24,47 +21,33 @@ export const sendMessagePlugin = new Elysia({
   name: "sessions-send-message",
 }).post(
   "/sessions/:ip/:sid/message",
-  async ({ params, request }) => {
-    const sseParts: string[] = [];
+  async function* ({ params, body }) {
     const { ip, sid } = params;
     if (!ip || !sid || !(await doesIpExist(ip))) {
-      sseParts.push(
-        dataStarPatchElementsString(
-          <div id="session-message-result" class="result">
-            Error Invalid IP or session ID
-          </div>,
-        ),
+      yield dataStarPatchElementsSSE(
+        <div id="session-message-result" class="result">
+          Error Invalid IP or session ID
+        </div>,
       );
-      return new Response(sseParts.join(""), {
-        headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-      });
+      return;
     }
     const cacheKey = resolveBaseUrl(ip) + "::" + sid;
-    // Manual parse body (test omits Content-Type header)
-    let rawText = "";
-    try {
-      const bodyText = await request.text();
-      try {
-        const parsed = JSON.parse(bodyText || "{}");
-        rawText = (parsed.messagetext || parsed.text || "").trim();
-      } catch {
-        rawText = bodyText.trim();
-      }
-    } catch {}
-    if (!rawText) {
-      sseParts.push(
-        dataStarPatchElementsString(
-          <div id="session-message-result" class="result">
-            No text
-          </div>,
-        ),
+    let text = body.messagetext;
+    if (!text) {
+      yield dataStarPatchElementsSSE(
+        <div id="session-message-result" class="result">
+          No text
+        </div>,
       );
-      return new Response(sseParts.join(""), {
-        headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-      });
+      return;
     }
+    yield dataStarPatchElementsSSE(
+      <div id="session-message-result" class="result">
+        Sending...
+      </div>,
+    );
     const sessionKey = sid;
-    let sendText = rawText;
+    let injected = false;
     try {
       if (
         !firstMessageSeen.has(sessionKey) &&
@@ -78,95 +61,50 @@ export const sendMessagePlugin = new Elysia({
           );
           existingCount = existing.length;
         } catch {}
-        if (existingCount === 0)
-          sendText = FIRST_MESSAGE_INSTRUCTION + "\n\n" + sendText;
+        if (existingCount === 0) {
+          text = FIRST_MESSAGE_INSTRUCTION + "\n\n" + text;
+          injected = true;
+        }
         firstMessageSeen.add(sessionKey);
         delete inFlightFirstMessage[sessionKey];
       }
     } catch {
       delete inFlightFirstMessage[sessionKey];
     }
-    function sanitize(s: string) {
-      return s.replace(
-        /[&<>"']/g,
-        (c) =>
-          ({
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            '"': "&quot;",
-            "'": "&#39;",
-          })[c] || c,
-      );
-    }
-    // Show sending state
-    publishElementToStreams(
+    yield publishElementToStreams(
       cacheKey,
       <div id="session-message-result" class="result">
-        Sending...
+        Added to queue...
       </div>,
     );
-    sseParts.push(
-      dataStarPatchElementsString(
-        <div id="session-message-result" class="result">
-          Sending...
-        </div>,
-      ),
-    );
-    const result = await rawSendMessage(resolveBaseUrl(ip), sid, sendText);
-    if (!result.ok) {
-      const msg = result.error || `HTTP ${result.status}`;
-      publishElementToStreams(
-        cacheKey,
-        <div id="session-message-result" class="result">
-          Error: {sanitize(msg)}
-        </div>,
-      );
-      sseParts.push(
-        dataStarPatchElementsString(
+    let failed = "";
+    (async () => {
+      const result = await rawSendMessage(resolveBaseUrl(ip), sid, text);
+      if (!result.ok) {
+        failed = result.error || `HTTP ${result.status}`;
+        publishElementToStreams(
+          cacheKey,
           <div id="session-message-result" class="result">
-            Error: {sanitize(msg)}
+            Error: {failed}
           </div>,
-        ),
-      );
-      return new Response(sseParts.join(""), {
-        headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-      });
-    }
-    const replyCombined = result.replyTexts.join("\n").trim();
-    if (replyCombined) {
-      publishElementToStreams(
+        );
+      }
+    })();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    if (!failed) {
+      yield publishElementToStreams(
         cacheKey,
-        <div id="session-message-result" class="result">
-          Reply: {sanitize(replyCombined)}
-        </div>,
-      );
-      sseParts.push(
-        dataStarPatchElementsString(
-          <div id="session-message-result" class="result">
-            Reply: {sanitize(replyCombined)}
-          </div>,
-        ),
-      );
-    }
-    // Clear status afterwards
-    publishElementToStreams(
-      cacheKey,
-      <div id="session-message-result" class="result"></div>,
-    );
-    sseParts.push(
-      dataStarPatchElementsString(
         <div id="session-message-result" class="result"></div>,
-      ),
-    );
-    return new Response(sseParts.join(""), {
-      headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-    });
+      );
+    }
   },
   {
     params: v.object({
       ip: v.string(),
       sid: v.string(),
+    }),
+    body: v.object({
+      messagetext: v.string(),
     }),
   },
 );
