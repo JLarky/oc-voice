@@ -85,5 +85,8 @@ Entire repo (server, client, scripts).
 - Only proceed to `git commit` after all above succeed; even for doc-only changes run tests + build
 - Agent reminder: when asked to commit, execute tests, build, format (if available) first, then stage & commit
 
+## Communication style
+- Don't ask if I want changes to be committed, don't ask about git push or github PRs, I'm going to do that myself.
+
 ## End
 Keep agents surgical—do only requested changes.
