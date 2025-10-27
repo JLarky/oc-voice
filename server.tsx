@@ -5,6 +5,8 @@ const port = 3001;
 import { createStorage } from "unstorage";
 import fsDriver from "unstorage/drivers/fs";
 import { createOpencodeClient } from "@opencode-ai/sdk";
+import { array, string as vString, safeParse } from 'valibot';
+const ipsSchema = array(vString);
 import {
   listMessages,
   sendMessage as rawSendMessage,
@@ -34,16 +36,20 @@ async function loadIps() {
   try {
     // Primary: read from storage key
     const stored = await storage.getItem("ips");
-    if (Array.isArray(stored)) {
-      stored.forEach((v) => typeof v === "string" && addIp(v));
-      return;
-    } else if (typeof stored === "string") {
-      try {
-        const arr = JSON.parse(stored);
-        if (Array.isArray(arr))
-          arr.forEach((v) => typeof v === "string" && addIp(v));
-        return;
-      } catch {}
+    if (stored) {
+      const candidate = Array.isArray(stored)
+        ? stored
+        : typeof stored === "string"
+          ? (() => { try { return JSON.parse(stored); } catch { return null; } })()
+          : null;
+      if (candidate) {
+        const result = safeParse(ipsSchema, candidate);
+        if (result.success) {
+          result.output.forEach((v) => addIp(v));
+          return;
+        }
+        console.warn("ips schema validation failed", { issues: result.issues?.length });
+      }
     }
   } catch (e) {
     console.warn("storage read ips error", (e as Error).message);
@@ -51,9 +57,17 @@ async function loadIps() {
   // Legacy migration fallback
   try {
     const text = await Bun.file(IP_STORE_FILE).text();
-    const arr = JSON.parse(text);
-    if (Array.isArray(arr))
-      arr.forEach((v) => typeof v === "string" && addIp(v));
+    let parsed: any = null;
+    try { parsed = JSON.parse(text); } catch {}
+    const candidate = Array.isArray(parsed) ? parsed : null;
+    if (candidate) {
+      const result = safeParse(ipsSchema, candidate);
+      if (result.success) {
+        result.output.forEach((v) => addIp(v));
+      } else {
+        console.warn('legacy ips schema validation failed', { issues: result.issues?.length });
+      }
+    }
     // Persist migrated value to storage (best effort)
     try {
       await storage.setItem("ips", [...ipStore]);
