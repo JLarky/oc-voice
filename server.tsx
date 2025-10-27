@@ -1665,9 +1665,93 @@ const server = Bun.serve({
     }
 
     if (url.pathname === "/client.js") {
-      return new Response(Bun.file("public/client.js"), {
-        headers: { "Content-Type": "application/javascript; charset=utf-8" },
-      });
+      // Dynamic on-demand build with in-memory cache. Rebuild when any source file mtime changes.
+      try {
+        // Simple dependency list; in a larger app consider a manifest or glob hash.
+        const baseSources = [
+          "src/client/index.ts",
+          "render.ts",
+          "rendering/index.ts",
+          "rendering/datastar.ts",
+        ];
+        const glob = new Bun.Glob("src/client/**/*.{ts,tsx}");
+        const sources = [
+          ...baseSources,
+          ...Array.from(glob.scanSync({ cwd: "." })).filter(
+            (p) => p !== "src/client/index.ts",
+          ),
+        ];
+        interface BuildCacheEntry {
+          code: string;
+          builtAt: number;
+          mtimes: Record<string, number>;
+        }
+        // @ts-ignore augment globalThis for cache reuse across hot reloads (same process)
+        if (!globalThis.__clientBuildCache) globalThis.__clientBuildCache = {};
+        // @ts-ignore
+        const cache: { entry?: BuildCacheEntry } =
+          globalThis.__clientBuildCache;
+        function currentMtimes() {
+          const out: Record<string, number> = {};
+          for (const s of sources) {
+            try {
+              out[s] = Bun.file(s).lastModified;
+            } catch {
+              out[s] = 0;
+            }
+          }
+          return out;
+        }
+        const mtimes = currentMtimes();
+        let needRebuild = false;
+        if (!cache.entry) needRebuild = true;
+        else {
+          for (const s of sources) {
+            if (cache.entry.mtimes[s] !== mtimes[s]) {
+              needRebuild = true;
+              break;
+            }
+          }
+        }
+        if (needRebuild) {
+          const build = await Bun.build({
+            entrypoints: ["src/client/index.ts"],
+            target: "browser",
+            minify: false,
+          });
+          if (!build.success) {
+            const firstErr = build.logs[0]?.message || "build failed";
+            return new Response(`// build error: ${firstErr}`, {
+              headers: {
+                "Content-Type": "application/javascript; charset=utf-8",
+              },
+              status: 500,
+            });
+          }
+          const output = build.outputs[0];
+          const code = await output.text();
+          cache.entry = { code, builtAt: Date.now(), mtimes };
+        }
+        const codeToSend = cache.entry
+          ? cache.entry.code
+          : "// no build output";
+        return new Response(codeToSend, {
+          headers: {
+            "Content-Type": "application/javascript; charset=utf-8",
+            "Cache-Control": "no-cache",
+          },
+        });
+      } catch (e) {
+        return new Response(
+          `// dynamic build exception ${(e as Error).message}`,
+          {
+            headers: {
+              "Content-Type": "application/javascript; charset=utf-8",
+            },
+            status: 500,
+          },
+        );
+      }
     }
     return new Response("Not Found", { status: 404 });
   },

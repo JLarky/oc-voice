@@ -206,9 +206,7 @@ export function publishElementToStreams(
  * Get the current state for a session so new streams can render fresh data
  * Returns messages and summary at connection time
  */
-export function getSessionCurrentState(
-  cacheKey: string,
-): {
+export function getSessionCurrentState(cacheKey: string): {
   msgs: import("./session-manager").Msg[];
   summary: import("./session-manager").SummaryState;
 } | null {
