@@ -1,6 +1,16 @@
 // fragments.tsx - small JSX helpers for HTML fragments previously in server.ts
 import { h } from "preact";
 import { MessageItems, Msg } from "./MessageItems";
+// Mirror AttemptRecord from server (subset for display)
+interface AttemptRecord {
+  url?: string;
+  ok?: boolean;
+  error?: string;
+  closed?: boolean;
+  events?: number;
+  durationMs?: number;
+  notice?: string;
+}
 
 interface StatusDivProps {
   id: string;
@@ -71,7 +81,7 @@ export function renderAutoScrollScriptEvent(): string {
 // Advanced events fragment
 interface AdvancedEventsProps {
   events: string[];
-  attempts: any[];
+  attempts: AttemptRecord[];
   stateJson?: string;
 }
 function AdvancedEvents({ events, attempts, stateJson }: AdvancedEventsProps) {

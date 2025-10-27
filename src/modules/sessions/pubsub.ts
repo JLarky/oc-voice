@@ -208,7 +208,10 @@ export function publishElementToStreams(
  */
 export function getSessionCurrentState(
   cacheKey: string,
-): { msgs: any[]; summary: any } | null {
+): {
+  msgs: import("./session-manager").Msg[];
+  summary: import("./session-manager").SummaryState;
+} | null {
   const manager = sessionManagers.get(cacheKey);
   if (manager && (manager as any).__getCurrentState) {
     return (manager as any).__getCurrentState();

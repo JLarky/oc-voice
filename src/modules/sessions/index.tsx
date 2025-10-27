@@ -1,14 +1,16 @@
 import { Elysia } from "elysia";
+import * as v from "valibot";
 import { dataStarPatchElementsSSE } from "../../../rendering/datastar";
 import { AdvancedRecentMessages } from "../../../rendering/fragments";
 import { doesIpExist } from "../../utils/store-ips";
 import { listMessages } from "../../oc-client";
 import { shouldReuseSummary } from "../../hash";
+import { Msg } from "./session-manager";
 
 export const sessionsPlugin = new Elysia({ name: "sessions-messages" }).get(
   "/sessions/:ip/:sid/messages/stream",
   async function* ({ params, request }) {
-    const { ip, sid } = params as { ip: string; sid: string };
+    const { ip, sid } = params;
     if (!ip || !sid || !(await doesIpExist(ip))) {
       yield dataStarPatchElementsSSE(
         <div id="messages-status" class="status">
@@ -25,7 +27,7 @@ export const sessionsPlugin = new Elysia({ name: "sessions-messages" }).get(
     while (!request.signal.aborted) {
       try {
         const base = `http://${ip}:2000`;
-        let msgs: any[] = [];
+        let msgs: Msg[] = [];
         try {
           const textMessages = await listMessages(base, sid);
           msgs = textMessages.map((m) => ({
@@ -92,7 +94,7 @@ export const sessionsPlugin = new Elysia({ name: "sessions-messages" }).get(
         );
         yield dataStarPatchElementsSSE(
           <AdvancedRecentMessages
-            messages={trimmed as any}
+            messages={trimmed}
             summaryText={summaryText}
             actionFlag={lastAction}
             totalCount={count}
@@ -107,5 +109,11 @@ export const sessionsPlugin = new Elysia({ name: "sessions-messages" }).get(
       await new Promise((r) => setTimeout(r, 2000));
     }
     console.log("Messages SSE ended", { ip, sid });
+  },
+  {
+    params: v.object({
+      ip: v.string(),
+      sid: v.string(),
+    }),
   },
 );

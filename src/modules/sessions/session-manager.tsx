@@ -1,5 +1,4 @@
 import { AdvancedRecentMessages } from "../../../rendering/fragments";
-import { dataStarPatchElementsString } from "../../../rendering/datastar";
 import { listMessages, summarizeMessages } from "../../oc-client";
 import { shouldReuseSummary } from "../../hash";
 import { publishElementToStreams } from "./pubsub";
@@ -8,7 +7,7 @@ import { JSX } from "preact";
 export interface Msg {
   role: string;
   text: string;
-  parts: { type: string; text: string }[];
+  parts: { type: "text"; text: string }[];
 }
 
 export interface SummaryState {
@@ -57,7 +56,7 @@ export function buildFragments(msgs: Msg[], summary: string, action: boolean) {
   );
   const recent = (
     <AdvancedRecentMessages
-      messages={trimmed as any}
+      messages={trimmed}
       summaryText={summary}
       actionFlag={action}
       totalCount={msgs.length}
@@ -75,7 +74,9 @@ export function createSessionManager(
   cacheKey: string,
   remoteBase: string,
   sid: string,
-) {
+): (() => void) & {
+  __getCurrentState?: () => { msgs: Msg[]; summary: SummaryState };
+} {
   let msgs: Msg[] = [];
   let summary: SummaryState = {
     summary: "(no recent messages)",
@@ -103,7 +104,7 @@ export function createSessionManager(
 
   // Start message polling (every 400ms)
   pollInterval = setInterval(async () => {
-    let raw: any[] = [];
+    let raw: { role: string; texts: string[] }[] = [];
     try {
       raw = await listMessages(remoteBase, sid);
     } catch (e) {
@@ -195,13 +196,14 @@ export function createSessionManager(
     }
   }, 200);
 
-  // Expose current state for new streams to get a fresh snapshot
-  const dispose = () => {
+  const dispose: (() => void) & {
+    __getCurrentState?: () => { msgs: Msg[]; summary: SummaryState };
+  } = (() => {
     clearInterval(pollInterval);
     clearInterval(summaryInterval);
-  };
+  }) as any;
 
-  (dispose as any).__getCurrentState = () => ({
+  dispose.__getCurrentState = () => ({
     msgs,
     summary: { ...summary },
   });

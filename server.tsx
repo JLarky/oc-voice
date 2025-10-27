@@ -37,7 +37,65 @@ const messageCountCache: Record<string, { count: number; updatedAt: number }> =
 const MESSAGE_COUNT_FRESH_MS = 5000;
 // Advanced aggregated state persistent across SSE reconnects for events view
 // Key: `${ip}::${sessionId}`
-const advancedAggregatedStateBySession: Record<string, any> = {};
+interface AttemptRecord {
+  label?: string;
+  url?: string;
+  ok?: boolean;
+  error?: string;
+  status?: number;
+  headers?: string[];
+  rawStatus?: number;
+  closed?: boolean;
+  events?: number;
+  durationMs?: number;
+  notice?: string;
+  keys?: string[];
+  directId?: string;
+  nestedId?: string;
+  sinceMs?: number;
+}
+import type { Msg } from "./src/modules/sessions/session-manager";
+interface AdvancedAggregatedState {
+  meta: { ip: string; sessionId: string; createdAt: number };
+  counts: {
+    totalEvents: number;
+    upstreamEvents: number;
+    syntheticMessageUpdates: number;
+  };
+  lastMessage: { role: string; text: string };
+  lastMessages: Msg[];
+  messageCount: number;
+  parts: Record<string, { type: string; text: string; updatedAt: number }>;
+  lastTypes: string[];
+  lastEventTs: number;
+  reconnects: number;
+  summary: string;
+  actionFlag: boolean;
+  shareUrl?: string;
+}
+const advancedAggregatedStateBySession: Record<
+  string,
+  AdvancedAggregatedState
+> = {};
+function createAggregatedState(
+  ip: string,
+  sid: string,
+): AdvancedAggregatedState {
+  return {
+    meta: { ip, sessionId: sid, createdAt: Date.now() },
+    counts: { totalEvents: 0, upstreamEvents: 0, syntheticMessageUpdates: 0 },
+    lastMessage: { role: "", text: "" },
+    lastMessages: [] as Msg[],
+    messageCount: 0,
+    parts: {},
+    lastTypes: [] as string[],
+    lastEventTs: 0,
+    reconnects: 0,
+    summary: "",
+    actionFlag: false,
+    shareUrl: undefined,
+  };
+}
 
 // Derive share URL for a session (best-effort; cached short TTL via advancedAggregatedState)
 function deriveShareUrlForSession(ip: string, sid: string): string | undefined {
@@ -69,7 +127,10 @@ function deriveShareUrlForSession(ip: string, sid: string): string | undefined {
             const aggKey = `${ip}::${sid}`;
             const agg =
               advancedAggregatedStateBySession[aggKey] ||
-              (advancedAggregatedStateBySession[aggKey] = {});
+              (advancedAggregatedStateBySession[aggKey] = createAggregatedState(
+                ip,
+                sid,
+              ));
             agg.shareUrl = url;
           } catch {}
           return url;
@@ -95,7 +156,8 @@ function deriveShareUrlForSession(ip: string, sid: string): string | undefined {
                 const aggKey = `${ip}::${sid}`;
                 const agg =
                   advancedAggregatedStateBySession[aggKey] ||
-                  (advancedAggregatedStateBySession[aggKey] = {});
+                  (advancedAggregatedStateBySession[aggKey] =
+                    createAggregatedState(ip, sid));
                 agg.shareUrl = url;
               } catch {}
               return url;
@@ -540,7 +602,8 @@ const server = Bun.serve({
                   const aggKey = `${ip}::${sid}`;
                   const agg =
                     advancedAggregatedStateBySession[aggKey] ||
-                    (advancedAggregatedStateBySession[aggKey] = {});
+                    (advancedAggregatedStateBySession[aggKey] =
+                      createAggregatedState(ip, sid));
                   agg.shareUrl = shareUrl;
                 } catch {}
               }
@@ -729,7 +792,7 @@ const server = Bun.serve({
         let sdkDetail: any = null;
         let sdkList: any = null;
         let rawDetail: any = null;
-        const attempts: any[] = [];
+        const attempts: AttemptRecord[] = [];
         try {
           const client = createOpencodeClient({ baseUrl: base });
           // Attempt multiple shapes for session.get
@@ -749,7 +812,7 @@ const server = Bun.serve({
                 });
                 if (okMatch && !sdkDetail) sdkDetail = val;
               } else {
-                attempts.push({ label, ok: false, value: val });
+                attempts.push({ label, ok: false });
               }
             } catch (e) {
               attempts.push({ label, ok: false, error: (e as Error).message });
@@ -839,7 +902,7 @@ const server = Bun.serve({
           return new Response("Unknown IP", { status: 404 });
         // Buffer of last raw event lines (JSON strings)
         const eventBuffer: string[] = [];
-        const attempts: any[] = [];
+        const attempts: AttemptRecord[] = [];
         const MAX_BUFFER = 100;
         const MAX_FIELD_LEN = 500; // truncate oversize data field values
         let lastPatchTs = 0;
@@ -1160,7 +1223,10 @@ const server = Bun.serve({
                 aggregatedState.lastMessages = trimmed.map((m) => ({
                   role: m.role,
                   text: m.text,
-                  parts: m.parts,
+                  parts: m.parts.map((p) => ({
+                    type: "text",
+                    text: p.text,
+                  })) as { type: "text"; text: string }[],
                 }));
                 aggregatedState.messageCount = count;
                 // Summary / action logic (mirrors messages SSE logic but integrated here)
