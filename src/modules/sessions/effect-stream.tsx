@@ -119,6 +119,25 @@ export const effectSessionsPlugin = new Elysia({
     }),
   );
 
+  // Ping every 2 seconds to keep connection alive
+  Effect.runFork(
+    Effect.sync(() => {
+      const interval = setInterval(() => {
+        if (aborted) {
+          clearInterval(interval);
+          return;
+        }
+        const status = (
+          <div
+            id="messages-status"
+            className="status"
+          >{`Updated ${new Date().toLocaleTimeString()}`}</div>
+        );
+        queue.push(dataStarPatchElementsString(status));
+      }, 2000);
+    }),
+  );
+
   const SUMMARY_DEBOUNCE_MS = 1500; // silence until assistant messages settle
   const MIN_SUMMARY_INTERVAL_MS = 5000; // hard minimum gap between summaries
   let lastAssistantHashChangeTs = 0;
