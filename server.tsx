@@ -4,11 +4,7 @@ const port = 3001;
 
 import { createOpencodeClient } from "@opencode-ai/sdk";
 
-import {
-  listMessages,
-  sendMessage as rawSendMessage,
-  FIRST_MESSAGE_INSTRUCTION,
-} from "./src/oc-client";
+import { listMessages } from "./src/oc-client";
 import { shouldReuseSummary } from "./src/hash";
 
 await loadIps();
@@ -28,9 +24,7 @@ const summaryCacheBySession: Record<
   string,
   { messageHash: string; summary: string; action: boolean; cachedAt: number }
 > = {};
-const SUMMARY_CACHE_TTL_MS = 15 * 60 * 1000; // 15m max retention
-const SUMMARY_NEGATIVE_TTL_MS = 60 * 1000; // 1m for failed summaries
-let lastSummaryPrune = Date.now();
+
 // Track in-flight asynchronous summarization per session key to avoid duplicate calls
 const SUMMARY_DEBOUNCE_MS = 2000; // delay before starting summarization to batch bursts
 const summaryDebounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -115,8 +109,7 @@ function deriveShareUrlForSession(ip: string, sid: string): string | undefined {
   }
 }
 
-const firstMessageSeen = new Set<string>();
-const inFlightFirstMessage: Record<string, boolean> = {};
+
 
 // Rendering helpers
 import {
@@ -130,11 +123,10 @@ import { dataStarPatchElementsString } from "./rendering/datastar";
 import {
   AdvancedSdkJson,
   AdvancedInfo,
-  StatusDiv,
   AdvancedEvents,
   AdvancedRecentMessages,
-} from "./rendering/fragments";
-import { IpsUl, SessionsUl } from "./rendering/lists";
+ } from "./rendering/fragments";
+import { SessionsUl } from "./rendering/lists";
 import { doesIpExist, getIpStore, loadIps } from "./src/utils/store-ips";
 
 // Read persisted summarizer session id (if any) for highlighting; returns string or undefined
@@ -1457,125 +1449,7 @@ const server = Bun.serve({
       }
     }
 
-    // Send message: POST /sessions/:ip/:sid/message (immediate send — queue removed)
-    if (
-      url.pathname.startsWith("/sessions/") &&
-      url.pathname.endsWith("/message") &&
-      req.method === "POST"
-    ) {
-      const parts = url.pathname.split("/").filter(Boolean); // ['sessions', ip, sid, 'message']
-      if (parts.length === 4 && parts[3] === "message") {
-        const ip = parts[1];
-        const sid = parts[2];
-        if (!doesIpExist(ip))
-          return new Response("Unknown IP", { status: 404 });
-        try {
-          const bodyText = await req.text();
-          let text = "";
-          if (bodyText) {
-            try {
-              const parsed = JSON.parse(bodyText);
-              if (
-                typeof parsed.messageText === "string" &&
-                parsed.messageText.trim()
-              )
-                text = parsed.messageText.trim();
-              else if (
-                typeof parsed.messagetext === "string" &&
-                parsed.messagetext.trim()
-              )
-                text = parsed.messagetext.trim();
-              else if (typeof parsed.text === "string" && parsed.text.trim())
-                text = parsed.text.trim();
-              else if (Array.isArray(parsed.parts)) {
-                const part = parsed.parts.find((p: any) => p?.type === "text");
-                if (part && typeof part.text === "string" && part.text.trim())
-                  text = part.text.trim();
-              }
-            } catch {
-              /* ignore */
-            }
-          }
-          if (!text)
-            return new Response(
-              dataStarPatchElementsString(
-                <div id="session-message-result" class="result">
-                  No text
-                </div>,
-              ),
-              {
-                headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-              },
-            );
-          // First message injection logic
-          const sessionKey = sid;
-          let injected = false;
-          try {
-            if (
-              !firstMessageSeen.has(sessionKey) &&
-              !inFlightFirstMessage[sessionKey]
-            ) {
-              inFlightFirstMessage[sessionKey] = true;
-              // Remote check to avoid misfire if messages already exist
-              let existingCount = 0;
-              try {
-                const existing = await listMessages(
-                  resolveBaseUrl(ip),
-                  sid,
-                ).catch(() => []);
-                existingCount = existing.length;
-              } catch {}
-              if (existingCount === 0) {
-                // Prepend system-style instruction
-                text = FIRST_MESSAGE_INSTRUCTION + "\n\n" + text;
-                injected = true;
-              }
-              firstMessageSeen.add(sessionKey);
-              delete inFlightFirstMessage[sessionKey];
-            }
-          } catch {
-            delete inFlightFirstMessage[sessionKey];
-          }
-          console.log("Message send start", { ip, sid, text, injected });
-          const result = await rawSendMessage(resolveBaseUrl(ip), sid, text);
-          if (!result.ok) {
-            const msg = result.error || `HTTP ${result.status}`;
-            const errorJsx = (
-              <div id="session-message-result" class="result">
-                Error: {msg}
-              </div>
-            );
-            return new Response(dataStarPatchElementsString(errorJsx), {
-              headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-              status: result.status || 500,
-            });
-          }
-          const joined = result.replyTexts.join("\n") || "(no reply)";
-          const truncated =
-            joined.substring(0, 50) + (joined.length > 50 ? "..." : "");
-          const replyJsx = (
-            <div id="session-message-result" class="result">
-              Reply: {truncated}
-            </div>
-          );
-          return new Response(dataStarPatchElementsString(replyJsx), {
-            headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-          });
-        } catch (e) {
-          console.error("Message route error", (e as Error).message);
-          const msg = (e as Error).message;
-          const errorJsx = (
-            <div id="session-message-result" class="result">
-              Error: {msg}
-            </div>
-          );
-          return new Response(dataStarPatchElementsString(errorJsx), {
-            headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-            status: 500,
-          });
-        }
-      }
-    }
+
 
     // Session detail page: GET /sessions/:ip/:sid
     if (url.pathname.startsWith("/sessions/")) {

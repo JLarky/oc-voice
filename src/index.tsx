@@ -2,12 +2,14 @@ import { Elysia } from "elysia";
 import { staticPlugin } from "./modules/static";
 import { ipsPlugin } from "./modules/ips";
 import { sessionsPlugin } from "./modules/sessions";
+import { sendMessagePlugin } from './modules/sessions/send-message';
 import "../server.tsx"; // start Bun server (port 3000) for legacy routes
 
 const app = new Elysia()
   .use(staticPlugin)
   .use(ipsPlugin)
   .use(sessionsPlugin)
+  .use(sendMessagePlugin)
   .onRequest(({ request }) => {
     console.log(request.method + " " + request.url);
   })
