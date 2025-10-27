@@ -6,6 +6,7 @@ import {
   sendMessage as rawSendMessage,
   FIRST_MESSAGE_INSTRUCTION,
 } from "../../oc-client";
+import { publishElementToStreams } from "./pubsub";
 import * as v from "valibot";
 
 // Ephemeral tracking for first-message injection (session scoped)
@@ -30,6 +31,7 @@ export const sendMessagePlugin = new Elysia({
       );
       return;
     }
+    const cacheKey = resolveBaseUrl(ip) + "::" + sid;
     let text = body.messagetext;
     if (!text) {
       yield dataStarPatchElementsSSE(
@@ -69,7 +71,8 @@ export const sendMessagePlugin = new Elysia({
     } catch {
       delete inFlightFirstMessage[sessionKey];
     }
-    yield dataStarPatchElementsSSE(
+    yield publishElementToStreams(
+      cacheKey,
       <div id="session-message-result" class="result">
         Added to queue...
       </div>,
@@ -79,18 +82,18 @@ export const sendMessagePlugin = new Elysia({
       const result = await rawSendMessage(resolveBaseUrl(ip), sid, text);
       if (!result.ok) {
         failed = result.error || `HTTP ${result.status}`;
-        console.error("Message send error", failed);
+        publishElementToStreams(
+          cacheKey,
+          <div id="session-message-result" class="result">
+            Error: {failed}
+          </div>,
+        );
       }
     })();
     await new Promise((resolve) => setTimeout(resolve, 500));
-    if (failed) {
-      yield dataStarPatchElementsSSE(
-        <div id="session-message-result" class="result">
-          Error: {failed}
-        </div>,
-      );
-    } else {
-      yield dataStarPatchElementsSSE(
+    if (!failed) {
+      yield publishElementToStreams(
+        cacheKey,
         <div id="session-message-result" class="result"></div>,
       );
     }
