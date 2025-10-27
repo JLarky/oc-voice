@@ -5,7 +5,7 @@ import { dataStarPatchElementsString } from "../../../rendering/datastar";
 import { doesIpExist } from "../../utils/store-ips";
 import { listMessages, summarizeMessages } from "../../oc-client";
 import { shouldReuseSummary } from "../../hash";
-import { subscribe } from "./pubsub";
+import { subscribe, publishToSession } from "./pubsub";
 
 interface Msg {
   role: string;
@@ -120,16 +120,18 @@ export const effectSessionsPlugin = new Elysia({
     }),
   );
 
-  // Ping every 2 seconds to keep connection alive (via pub/sub)
+  // Subscribe to typed session messages
   let unsubscribePing: (() => void) | null = null;
-  unsubscribePing = subscribe(cacheKey, () => {
-    const status = (
-      <div
-        id="messages-status"
-        className="status"
-      >{`Updated ${new Date().toLocaleTimeString()}`}</div>
-    );
-    queue.push(dataStarPatchElementsString(status));
+  unsubscribePing = subscribe(cacheKey, (message) => {
+    if (message.type === "updated-at") {
+      const status = (
+        <div
+          id="messages-status"
+          className="status"
+        >{`Updated ${message.time.toLocaleTimeString()}`}</div>
+      );
+      queue.push(dataStarPatchElementsString(status));
+    }
   });
 
   const SUMMARY_DEBOUNCE_MS = 1500; // silence until assistant messages settle
