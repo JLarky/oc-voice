@@ -1,4 +1,5 @@
-// server.ts - Bun HTTP server serving index.html, bundled client, and API endpoints
+// server on port 3001 is legacy and will eventually be fully migrated to Elysia
+// 3000 located in src/index.tsx, make sure to implement new features always in Elysia
 
 const port = 3001;
 
