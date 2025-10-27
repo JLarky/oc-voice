@@ -82,8 +82,12 @@ export function SessionAdvancedPage(props: SessionAdvancedProps) {
         <div>(loading)</div>
       </div>
 
-      <div id="messages-status" className="status">Connecting messages...</div>
-      <div id="messages-list"><div>(loading recent messages)</div></div>
+      <div id="messages-status" className="status">
+        Connecting messages...
+      </div>
+      <div id="messages-list">
+        <div>(loading recent messages)</div>
+      </div>
       <h2>Events (Raw SSE)</h2>
       <div
         id="advanced-events"

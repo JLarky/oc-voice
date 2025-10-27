@@ -109,8 +109,6 @@ function deriveShareUrlForSession(ip: string, sid: string): string | undefined {
   }
 }
 
-
-
 // Rendering helpers
 import {
   renderSessionDetailPage,
@@ -125,7 +123,7 @@ import {
   AdvancedInfo,
   AdvancedEvents,
   AdvancedRecentMessages,
- } from "./rendering/fragments";
+} from "./rendering/fragments";
 import { SessionsUl } from "./rendering/lists";
 import { doesIpExist, getIpStore, loadIps } from "./src/utils/store-ips";
 
@@ -885,7 +883,7 @@ const server = Bun.serve({
           };
         } else {
           // Mark reconnect for visibility
-            advancedAggregatedStateBySession[aggKey].reconnects =
+          advancedAggregatedStateBySession[aggKey].reconnects =
             (advancedAggregatedStateBySession[aggKey].reconnects || 0) + 1;
         }
         const aggregatedState = advancedAggregatedStateBySession[aggKey];
@@ -1449,8 +1447,6 @@ const server = Bun.serve({
       }
     }
 
-
-
     // Session detail page: GET /sessions/:ip/:sid
     if (url.pathname.startsWith("/sessions/")) {
       const parts = url.pathname.split("/").filter(Boolean); // ['sessions', ip, sid, maybe 'advanced']
@@ -1544,8 +1540,8 @@ const server = Bun.serve({
         } catch {}
         const page = renderSessionDetailPage({
           ip,
-            sessionId: sid,
-            sessionTitle,
+          sessionId: sid,
+          sessionTitle,
         });
         return new Response(page, {
           headers: { "Content-Type": "text/html; charset=utf-8" },
