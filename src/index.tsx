@@ -1,9 +1,11 @@
 import { Elysia } from "elysia";
 import { staticPlugin } from "./modules/static";
+import { ipsPlugin } from "./modules/ips";
 import "../server.tsx"; // start Bun server (port 3000) for legacy routes
 
 const app = new Elysia()
   .use(staticPlugin)
+  .use(ipsPlugin)
   .onRequest(({ request }) => {
     console.log(request.method + " " + request.url);
   })

@@ -11,3 +11,12 @@ export function dataStarPatchElementsString(jsx: JSX.Element): string {
   result += "\n";
   return result;
 }
+
+export function dataStarPatchElementsSSE(jsx: JSX.Element) {
+  return {
+    sse: true,
+    toSSE: () => {
+      return dataStarPatchElementsString(jsx);
+    },
+  };
+}

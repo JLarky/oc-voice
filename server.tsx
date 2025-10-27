@@ -2,11 +2,8 @@
 
 const port = 3001;
 
-import { createStorage } from "unstorage";
-import fsDriver from "unstorage/drivers/fs";
 import { createOpencodeClient } from "@opencode-ai/sdk";
-import { array, string as vString, safeParse } from 'valibot';
-const ipsSchema = array(vString);
+
 import {
   listMessages,
   sendMessage as rawSendMessage,
@@ -14,91 +11,6 @@ import {
 } from "./src/oc-client";
 import { shouldReuseSummary } from "./src/hash";
 
-// In-memory IP address key-value store (simple list of IPs)
-// Accepts only IPv4 dotted quads; prevents duplicates.
-const ipStore: string[] = [];
-function addIp(ip: string) {
-  const trimmed = ip.trim();
-  if (!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(trimmed)) return false;
-  if (!ipStore.includes(trimmed)) ipStore.push(trimmed);
-  return true;
-}
-function removeIp(ip: string) {
-  const idx = ipStore.indexOf(ip.trim());
-  if (idx === -1) return false;
-  ipStore.splice(idx, 1);
-  return true;
-}
-const IP_STORE_FILE = "ip-store.json";
-// Unstorage-backed persistence (legacy file migration)
-const storage = createStorage({ driver: fsDriver({ base: "." }) });
-const STORAGE_IPS_KEY_NEW = 'storage/ips.json';
-const STORAGE_IPS_KEY_OLD = 'ips';
-async function loadIps() {
-  try {
-    // Primary: read from new storage key then fallback to old key
-    const primary = await storage.getItem(STORAGE_IPS_KEY_NEW);
-    const stored = primary ?? await storage.getItem(STORAGE_IPS_KEY_OLD);
-    if (stored) {
-      const candidate = Array.isArray(stored)
-        ? stored
-        : typeof stored === "string"
-          ? (() => { try { return JSON.parse(stored); } catch { return null; } })()
-          : null;
-      if (candidate) {
-        const result = safeParse(ipsSchema, candidate);
-        if (result.success) {
-          result.output.forEach((v) => addIp(v));
-          return;
-        }
-        console.warn("ips schema validation failed", { issues: result.issues?.length });
-      }
-    }
-  } catch (e) {
-    console.warn("storage read ips error", (e as Error).message);
-  }
-  // Legacy migration fallback
-  try {
-    const text = await Bun.file(IP_STORE_FILE).text();
-    let parsed: any = null;
-    try { parsed = JSON.parse(text); } catch {}
-    const candidate = Array.isArray(parsed) ? parsed : null;
-    if (candidate) {
-      const result = safeParse(ipsSchema, candidate);
-      if (result.success) {
-        result.output.forEach((v) => addIp(v));
-      } else {
-        console.warn('legacy ips schema validation failed', { issues: result.issues?.length });
-      }
-    }
-    // Persist migrated value to storage (best effort)
-    try {
-      await storage.setItem(STORAGE_IPS_KEY_NEW, [...ipStore]);
-      await storage.setItem(STORAGE_IPS_KEY_OLD, [...ipStore]);
-      console.log("Migrated legacy ip-store.json to unstorage (new + old key)");
-    } catch (e2) {
-      console.warn("migration write failed", (e2 as Error).message);
-    }
-  } catch {
-    /* no existing legacy file */
-  }
-}
-async function persistIps() {
-  try {
-    await storage.setItem(STORAGE_IPS_KEY_NEW, [...ipStore]);
-    await storage.setItem(STORAGE_IPS_KEY_OLD, [...ipStore]);
-    console.log("Persist ips stored (new + old keys)", { count: ipStore.length });
-  } catch (e) {
-    console.error("Persist ips storage failed", (e as Error).message);
-    // Fallback: direct legacy file write (non-atomic)
-    try {
-      await Bun.write(IP_STORE_FILE, JSON.stringify(ipStore));
-      console.log("Fallback legacy file write complete");
-    } catch (e2) {
-      console.error("Fallback legacy persist failed", (e2 as Error).message);
-    }
-  }
-}
 await loadIps();
 
 function resolveBaseUrl(ip: string) {
@@ -304,6 +216,7 @@ import {
   AdvancedRecentMessages,
 } from "./rendering/fragments";
 import { IpsUl, SessionsUl } from "./rendering/lists";
+import { doesIpExist, getIpStore, loadIps } from "./src/utils/store-ips";
 
 // Read persisted summarizer session id (if any) for highlighting; returns string or undefined
 async function readSummarizerId(): Promise<string | undefined> {
@@ -470,189 +383,10 @@ async function fetchMessages(ip: string, sessionId: string) {
 
 // Legacy messagesSSE removed; advanced events stream now handles messages + summary.
 
-// SSE of IP addresses
-function ipsSSE(): Response {
-  let interval: ReturnType<typeof setInterval> | undefined;
-  const stream = new ReadableStream({
-    async start(controller) {
-      function build() {
-        try {
-          const statusJsx = (
-            <StatusDiv
-              id="ips-status"
-              text={`Updated ${new Date().toLocaleTimeString()}`}
-            />
-          );
-          const ipsJsx = <IpsUl ips={ipStore} />;
-          try {
-            controller.enqueue(
-              new TextEncoder().encode(dataStarPatchElementsString(statusJsx)),
-            );
-            controller.enqueue(
-              new TextEncoder().encode(dataStarPatchElementsString(ipsJsx)),
-            );
-          } catch (e) {
-            if (interval) clearInterval(interval);
-            controller.close();
-          }
-        } catch (e) {
-          console.error("IPs SSE build error", (e as Error).message);
-        }
-      }
-      build();
-      interval = setInterval(build, 5000);
-    },
-    cancel() {
-      if (interval) clearInterval(interval);
-    },
-  });
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
-}
-
 const server = Bun.serve({
   port,
   async fetch(req: Request) {
     const url = new URL(req.url);
-
-    // Add IP address
-    if (url.pathname === "/ips/add" && req.method === "POST") {
-      try {
-        // Datastar sends FormData as JSON-like object with both lowercase & original casing
-        const bodyText = await req.text();
-        let ip = "";
-        if (bodyText) {
-          try {
-            const parsed = JSON.parse(bodyText);
-            if (typeof parsed.ip === "string") ip = parsed.ip.trim();
-            else if (typeof parsed.IP === "string") ip = parsed.IP.trim();
-          } catch {
-            const params = new URLSearchParams(bodyText);
-            const p = params.get("ip") || params.get("IP");
-            if (p) ip = p.trim();
-            else {
-              const match = bodyText.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/);
-              if (match) ip = match[0];
-            }
-          }
-        }
-        ip = ip.trim();
-        if (ip && !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(ip)) ip = "";
-        let ok = false;
-        if (ip) ok = addIp(ip);
-        if (ok) await persistIps();
-        console.log("Add IP attempt", { raw: bodyText, parsedIp: ip, ok });
-        const stream =
-          dataStarPatchElementsString(
-            <div id="add-ip-result" class="result">
-              {ok ? `Added IP: ${ip}` : "Invalid or duplicate IP"}
-            </div>,
-          ) + dataStarPatchElementsString(<IpsUl ips={ipStore} />);
-        return new Response(stream, {
-          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-        });
-      } catch (e) {
-        const msg = (e as Error).message;
-        const errorResultJsx = (
-          <div id="add-ip-result" class="result">
-            Error: {msg}
-          </div>
-        );
-        return new Response(dataStarPatchElementsString(errorResultJsx), {
-          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-          status: 500,
-        });
-      }
-    }
-
-    // Remove IP (legacy body-based)
-    if (url.pathname === "/ips/remove" && req.method === "POST") {
-      try {
-        const bodyText = await req.text();
-        let ip = "";
-        if (bodyText) {
-          try {
-            const parsed = JSON.parse(bodyText);
-            if (typeof parsed.ip === "string") ip = parsed.ip.trim();
-            else if (typeof parsed.IP === "string") ip = parsed.IP.trim();
-          } catch {
-            const params = new URLSearchParams(bodyText);
-            const p = params.get("ip") || params.get("IP");
-            if (p) ip = p.trim();
-            else {
-              const match = bodyText.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/);
-              if (match) ip = match[0];
-            }
-          }
-        }
-        if (!ip) {
-          const qp = url.searchParams.get("ip") || url.searchParams.get("IP");
-          if (qp) ip = qp.trim();
-        }
-        ip = ip.trim();
-        if (ip && !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(ip)) ip = "";
-        let ok = false;
-        if (ip) ok = removeIp(ip);
-        if (ok) await persistIps();
-        console.log("Remove IP attempt", { raw: bodyText, parsedIp: ip, ok });
-        const stream =
-          dataStarPatchElementsString(
-            <div id="add-ip-result" class="result">
-              {ok
-                ? "Removed IP: " + ip
-                : ip
-                  ? "IP not found"
-                  : "No IP provided"}
-            </div>,
-          ) + dataStarPatchElementsString(<IpsUl ips={ipStore} />);
-        return new Response(stream, {
-          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-        });
-      } catch (e) {
-        const msg = (e as Error).message;
-        return new Response(
-          dataStarPatchElementsString(
-            <div id="add-ip-result" class="result">
-              Error: {msg}
-            </div>,
-          ),
-          {
-            headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-            status: 500,
-          },
-        );
-      }
-    }
-
-    // Remove IP via path: POST /ips/remove/:ip
-    if (url.pathname.startsWith("/ips/remove/") && req.method === "POST") {
-      const parts = url.pathname.split("/").filter(Boolean); // ['ips','remove','ip']
-      if (parts.length === 3) {
-        const ip = parts[2].trim();
-        let ok = false;
-        if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(ip)) ok = removeIp(ip);
-        if (ok) await persistIps();
-        console.log("Remove IP path attempt", { ip, ok });
-        const stream =
-          dataStarPatchElementsString(
-            <div id="add-ip-result" class="result">
-              {ok ? "Removed IP: " + ip : "IP not found"}
-            </div>,
-          ) + dataStarPatchElementsString(<IpsUl ips={ipStore} />);
-        return new Response(stream, {
-          headers: { "Content-Type": "text/event-stream; charset=utf-8" },
-        });
-      }
-    }
-
-    // IP list SSE
-    if (url.pathname === "/ips/stream") return ipsSSE();
 
     // Sessions list SSE for given IP: /sessions/:ip/stream
     if (
@@ -662,7 +396,7 @@ const server = Bun.serve({
       const parts = url.pathname.split("/").filter(Boolean); // ['sessions', ip, 'stream']
       if (parts.length === 3) {
         const ip = parts[1];
-        if (!ipStore.includes(ip))
+        if (!doesIpExist(ip))
           return new Response("Unknown IP", { status: 404 });
         return sessionsSSE(ip);
       }
@@ -677,7 +411,7 @@ const server = Bun.serve({
       const parts = url.pathname.split("/").filter(Boolean); // ['sessions','ip','create-session']
       if (parts.length === 3) {
         const ip = parts[1];
-        if (!ipStore.includes(ip))
+        if (!doesIpExist(ip))
           return new Response("Unknown IP", { status: 404 });
         try {
           const bodyText = await req.text();
@@ -772,7 +506,7 @@ const server = Bun.serve({
       if (parts.length === 4 && parts[3] === "delete-session") {
         const ip = parts[1];
         const sid = parts[2];
-        if (!ipStore.includes(ip))
+        if (!doesIpExist(ip))
           return new Response("Unknown IP", { status: 404 });
         let deletedOk = false;
         const base = resolveBaseUrl(ip);
@@ -852,7 +586,7 @@ const server = Bun.serve({
       if (parts.length === 4 && parts[3] === "share-session") {
         const ip = parts[1];
         const sid = parts[2];
-        if (!ipStore.includes(ip))
+        if (!doesIpExist(ip))
           return new Response("Unknown IP", { status: 404 });
         let sharedOk = false;
         const base = resolveBaseUrl(ip);
@@ -932,7 +666,7 @@ const server = Bun.serve({
       if (parts.length === 4 && parts[3] === "unshare-session") {
         const ip = parts[1];
         const sid = parts[2];
-        if (!ipStore.includes(ip))
+        if (!doesIpExist(ip))
           return new Response("Unknown IP", { status: 404 });
         let unsharedOk = false;
         const base = resolveBaseUrl(ip);
@@ -987,7 +721,7 @@ const server = Bun.serve({
       const parts = url.pathname.split("/").filter(Boolean); // ['sessions','ip','clear-sessions']
       if (parts.length === 3 && parts[2] === "clear-sessions") {
         const ip = parts[1];
-        if (!ipStore.includes(ip))
+        if (!doesIpExist(ip))
           return new Response("Unknown IP", { status: 404 });
         let deletedCount = 0;
         let total = 0;
@@ -1085,7 +819,7 @@ const server = Bun.serve({
       ) {
         const ip = parts[1];
         const sid = parts[2];
-        if (!ipStore.includes(ip))
+        if (!doesIpExist(ip))
           return new Response("Unknown IP", { status: 404 });
         const base = resolveBaseUrl(ip);
         let sdkDetail: any = null;
@@ -1197,7 +931,7 @@ const server = Bun.serve({
       ) {
         const ip = parts[1];
         const sid = parts[2];
-        if (!ipStore.includes(ip))
+        if (!doesIpExist(ip))
           return new Response("Unknown IP", { status: 404 });
         // Buffer of last raw event lines (JSON strings)
         const eventBuffer: string[] = [];
@@ -1755,7 +1489,7 @@ const server = Bun.serve({
       ) {
         const ip = parts[1];
         const sid = parts[2];
-        if (!ipStore.includes(ip))
+        if (!doesIpExist(ip))
           return new Response("Unknown IP", { status: 404 });
         let sessionTitle = "";
         try {
@@ -1844,7 +1578,7 @@ const server = Bun.serve({
       if (parts.length === 4 && parts[3] === "message") {
         const ip = parts[1];
         const sid = parts[2];
-        if (!ipStore.includes(ip))
+        if (!doesIpExist(ip))
           return new Response("Unknown IP", { status: 404 });
         try {
           const bodyText = await req.text();
@@ -2002,7 +1736,7 @@ const server = Bun.serve({
       ) {
         const ip = parts[1];
         const sid = parts[2];
-        if (!ipStore.includes(ip))
+        if (!getIpStore().includes(ip))
           return new Response("Unknown IP", { status: 404 });
         const queueKey = `${ip}::${sid}`;
         const jobs = queueJobsBySession[queueKey] || [];
@@ -2056,7 +1790,7 @@ const server = Bun.serve({
       ) {
         const ip = parts[1];
         const sid = parts[2];
-        if (!ipStore.includes(ip)) return Response.redirect("/", 302);
+        if (!getIpStore().includes(ip)) return Response.redirect("/", 302);
         // Validate session exists (best effort)
         try {
           const base = resolveBaseUrl(ip);
@@ -2155,7 +1889,7 @@ const server = Bun.serve({
       ) {
         const ip = parts[1];
         const sid = parts[2];
-        if (!ipStore.includes(ip)) return Response.redirect("/", 302);
+        if (!doesIpExist(ip)) return Response.redirect("/", 302);
         // Reuse title lookup from detail page (best effort)
         let sessionTitle = "";
         try {
@@ -2182,7 +1916,7 @@ const server = Bun.serve({
         parts[0] === "sessions"
       ) {
         const ip = parts[1];
-        if (!ipStore.includes(ip)) return Response.redirect("/", 302);
+        if (!doesIpExist(ip)) return Response.redirect("/", 302);
         const page = renderSessionsListPage({ ip });
         return new Response(page, {
           headers: { "Content-Type": "text/html; charset=utf-8" },
