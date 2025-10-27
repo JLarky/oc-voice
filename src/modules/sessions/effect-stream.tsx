@@ -29,6 +29,22 @@ interface CacheEntry {
   inFlight: boolean;
 }
 const summaryCache = new Map<string, CacheEntry>();
+let summaryCachePrunerStarted = false;
+function startSummaryCachePruner() {
+  if (summaryCachePrunerStarted) return;
+  summaryCachePrunerStarted = true;
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of summaryCache.entries()) {
+      const ttl =
+        entry.summary === "(summary failed)"
+          ? SUMMARY_CACHE_FAIL_MS
+          : SUMMARY_CACHE_SUCCESS_MS;
+      if (now - entry.ts > ttl) summaryCache.delete(key);
+    }
+  }, 30000);
+}
+startSummaryCachePruner();
 
 function buildFragments(msgs: Msg[], summary: string, action: boolean) {
   const trimmed = msgs.length > 50 ? msgs.slice(-50) : msgs;
@@ -103,9 +119,13 @@ export const effectSessionsPlugin = new Elysia({
     }),
   );
 
+  const SUMMARY_DEBOUNCE_MS = 1500; // silence until assistant messages settle
+  const MIN_SUMMARY_INTERVAL_MS = 5000; // hard minimum gap between summaries
+  let lastAssistantHashChangeTs = 0;
+  let lastSummaryEmitTs = 0;
   Effect.runFork(
     Effect.sync(() => {
-      const interval = setInterval(() => {
+      const interval = setInterval(async () => {
         if (aborted) {
           clearInterval(interval);
           return;
@@ -122,6 +142,7 @@ export const effectSessionsPlugin = new Elysia({
           summary.lastHash,
           recentForHash,
         );
+        if (hash !== summary.lastHash) lastAssistantHashChangeTs = Date.now();
         const entry = summaryCache.get(cacheKey);
         const now = Date.now();
         const ttl =
@@ -129,80 +150,48 @@ export const effectSessionsPlugin = new Elysia({
             ? SUMMARY_CACHE_FAIL_MS
             : SUMMARY_CACHE_SUCCESS_MS;
         const fresh = entry && now - entry.ts < ttl;
+        const stable = now - lastAssistantHashChangeTs >= SUMMARY_DEBOUNCE_MS;
+        if (!stable) return; // wait for assistant messages to settle
         if ((reuse && fresh) || summary.inFlight || (entry && entry.inFlight))
           return;
+        if (Date.now() - lastSummaryEmitTs < MIN_SUMMARY_INTERVAL_MS) return;
         summary.inFlight = true;
         if (entry) entry.inFlight = true;
-        setTimeout(async () => {
-          if (aborted) {
-            summary.inFlight = false;
-            if (entry) entry.inFlight = false;
-            return;
-          }
-          const recentAfterDelay = msgs.slice(-3).map((m) => ({
-            role: m.role || "message",
-            text: (m.parts?.[0]?.text || m.text || "")
-              .replace(/\s+/g, " ")
-              .trim(),
-          }));
-          const { hash: hashAfterDelay, reuse: reuseAfterDelay } =
-            shouldReuseSummary(summary.lastHash, recentAfterDelay);
-          const entry2 = summaryCache.get(cacheKey);
-          const now2 = Date.now();
-          const ttl2 =
-            entry2 && entry2.summary === "(summary failed)"
-              ? SUMMARY_CACHE_FAIL_MS
-              : SUMMARY_CACHE_SUCCESS_MS;
-          const stillFresh = entry2 && now2 - entry2.ts < ttl2;
-          if (
-            msgs[msgs.length - 1]?.role !== "assistant" ||
-            (reuseAfterDelay && stillFresh)
-          ) {
-            summary.inFlight = false;
-            if (entry2) entry2.inFlight = false;
-            return;
-          }
-          try {
-            const summ = await summarizeMessages(
-              remoteBase,
-              recentAfterDelay,
-              sid,
-            );
-            if (summ.ok) {
-              summary.summary = summ.summary || "(empty summary)";
-              summary.action = summ.action;
-            } else {
-              summary.summary = "(summary failed)";
-              summary.action = false;
-            }
-            summary.lastHash = hashAfterDelay;
-            summaryCache.set(cacheKey, {
-              summary: summary.summary,
-              action: summary.action,
-              hash: summary.lastHash,
-              ts: Date.now(),
-              inFlight: false,
-            });
-            queue.push(
-              ...buildFragments(msgs, summary.summary, summary.action),
-            );
-          } catch (e) {
-            console.error("effect summary error", (e as Error).message);
+        try {
+          const summ = await summarizeMessages(remoteBase, recentForHash, sid);
+          if (summ.ok) {
+            summary.summary = summ.summary || "(empty summary)";
+            summary.action = summ.action;
+          } else {
             summary.summary = "(summary failed)";
             summary.action = false;
-            summaryCache.set(cacheKey, {
-              summary: summary.summary,
-              action: summary.action,
-              hash: summary.lastHash,
-              ts: Date.now(),
-              inFlight: false,
-            });
-          } finally {
-            summary.inFlight = false;
-            const fin = summaryCache.get(cacheKey);
-            if (fin) fin.inFlight = false;
           }
-        }, 800);
+          summary.lastHash = hash;
+          lastSummaryEmitTs = Date.now();
+          summaryCache.set(cacheKey, {
+            summary: summary.summary,
+            action: summary.action,
+            hash: summary.lastHash,
+            ts: Date.now(),
+            inFlight: false,
+          });
+          queue.push(...buildFragments(msgs, summary.summary, summary.action));
+        } catch (e) {
+          console.error("effect summary error", (e as Error).message);
+          summary.summary = "(summary failed)";
+          summary.action = false;
+          summaryCache.set(cacheKey, {
+            summary: summary.summary,
+            action: summary.action,
+            hash: summary.lastHash,
+            ts: Date.now(),
+            inFlight: false,
+          });
+        } finally {
+          summary.inFlight = false;
+          const fin = summaryCache.get(cacheKey);
+          if (fin) fin.inFlight = false;
+        }
       }, 200);
     }),
   );
@@ -211,18 +200,25 @@ export const effectSessionsPlugin = new Elysia({
   const stream = new ReadableStream({
     start(controller) {
       queue.push(...buildFragments(msgs, summary.summary, summary.action));
+      let closed = false;
+      let flushTimer: any;
       const flush = () => {
         if (aborted) {
-          controller.close();
+          if (!closed) {
+            closed = true;
+            try {
+              controller.close();
+            } catch (_) {}
+          }
           return;
         }
         if (queue.length) {
           const out = queue.splice(0, queue.length);
           for (const frag of out) controller.enqueue(encoder.encode(frag));
         }
-        setTimeout(flush, 100);
+        flushTimer = setTimeout(flush, 100);
       };
-      flush();
+      flushTimer = setTimeout(flush, 0);
     },
     cancel() {
       aborted = true;
