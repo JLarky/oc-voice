@@ -104,6 +104,7 @@ export function createSessionManager(
   let lastSignature = "";
   let pollInterval: NodeJS.Timeout;
   let summaryInterval: NodeJS.Timeout;
+  let lastObservedAssistantHash = "";
 
   // Debug ring buffer (in-memory, not persisted) if debug enabled
   const debugLines: string[] = [];
@@ -211,22 +212,29 @@ export function createSessionManager(
   summaryInterval = setInterval(
     async () => {
       const lastRole = msgs[msgs.length - 1]?.role;
-      if (lastRole !== "assistant") return;
+      if (lastRole !== "assistant") {
+        pushDebug("summary skip not-assistant");
+        return;
+      }
       const recentForHash = msgs.slice(-3).map((m) => ({
         role: m.role || "message",
         text: (m.parts?.[0]?.text || m.text || "").replace(/\s+/g, " ").trim(),
       }));
+      // Use last successful summary hash (or cache entry) for reuse logic so we don't mark reuse prematurely
+      const entry = summaryCache.get(cacheKey);
+      const reuseSourceHash = summary.lastHash || entry?.hash;
       const { hash, reuse } = shouldReuseSummary(
-        summary.lastHash,
+        reuseSourceHash,
         recentForHash,
       );
-      if (hash !== summary.lastHash) {
+      if (hash !== lastObservedAssistantHash) {
         lastAssistantHashChangeTs = Date.now();
         pushDebug(
-          "assistant hash changed" + JSON.stringify([hash, summary.lastHash]),
+          "assistant hash changed" +
+            JSON.stringify([hash, lastObservedAssistantHash]),
         );
+        lastObservedAssistantHash = hash;
       }
-      const entry = summaryCache.get(cacheKey);
       const now = Date.now();
       const ttl =
         entry && entry.summary === "(summary failed)"
@@ -234,20 +242,49 @@ export function createSessionManager(
           : SUMMARY_CACHE_SUCCESS_MS;
       const fresh = entry && now - entry.ts < ttl;
       const stable = now - lastAssistantHashChangeTs >= SUMMARY_DEBOUNCE_MS;
-      if (!stable) return;
-      if ((reuse && fresh) || summary.inFlight || (entry && entry.inFlight))
+      if (!stable) {
+        pushDebug(
+          "summary skip debounce remaining=" +
+            (SUMMARY_DEBOUNCE_MS - (now - lastAssistantHashChangeTs)),
+        );
         return;
-      if (Date.now() - lastSummaryEmitTs < MIN_SUMMARY_INTERVAL_MS) return;
+      }
+      if (summary.inFlight || (entry && entry.inFlight)) {
+        pushDebug("summary skip in-flight");
+        return;
+      }
+      if (reuse && fresh) {
+        pushDebug(
+          "summary skip reuse=true fresh=true hash=" + hash.slice(0, 8),
+        );
+        return;
+      }
+      const sinceLast = now - lastSummaryEmitTs;
+      if (sinceLast < MIN_SUMMARY_INTERVAL_MS) {
+        pushDebug(
+          "summary skip min-interval remaining=" +
+            (MIN_SUMMARY_INTERVAL_MS - sinceLast),
+        );
+        return;
+      }
       summary.inFlight = true;
       if (entry) entry.inFlight = true;
+      pushDebug("summary start hash=" + hash.slice(0, 8));
       try {
         const summ = await summarizeMessages(remoteBase, recentForHash, sid);
         if (summ.ok) {
           summary.summary = summ.summary || "(empty summary)";
           summary.action = summ.action;
+          pushDebug(
+            "summary ok chars=" +
+              summary.summary.length +
+              " action=" +
+              summary.action,
+          );
         } else {
           summary.summary = "(summary failed)";
           summary.action = false;
+          pushDebug("summary failed status ok=false");
         }
         summary.lastHash = hash;
         lastSummaryEmitTs = Date.now();
@@ -273,6 +310,9 @@ export function createSessionManager(
           ts: Date.now(),
           inFlight: false,
         });
+        pushDebug(
+          "summary error " + (e instanceof Error ? e.message : String(e)),
+        );
       } finally {
         summary.inFlight = false;
         const fin = summaryCache.get(cacheKey);
