@@ -53,7 +53,7 @@ export const effectSessionsPlugin = new Elysia({
               <div
                 id="messages-status"
                 className="status"
-              >{`Updated ${new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:'America/Denver'}).format(message.time)}`}</div>
+              >{`Updated ${new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Denver" }).format(message.time)}`}</div>
             );
             emit(Effect.succeed(Chunk.of(status)));
           } else if (message.type === "publish-element") {
@@ -71,12 +71,34 @@ export const effectSessionsPlugin = new Elysia({
       </div>,
     );
 
+    // Yield initial empty fragments (messages-list) immediately for quick UI
+    for (const fragment of buildFragments([], "(no recent messages)", false)) {
+      yield dataStarPatchElementsSSE(fragment);
+    }
+
     // NOW register session manager (which will publish initial updates)
     if (!sessionManagers.has(cacheKey)) {
       const dispose = createSessionManager(cacheKey, remoteBase, sid);
       registerSessionManager(cacheKey, dispose);
+      // Immediately render current (possibly empty) fragments so list appears early
+      const currentState = getSessionCurrentState(cacheKey);
+      if (currentState) {
+        const fragments = buildFragments(
+          currentState.msgs,
+          currentState.summary.summary,
+          currentState.summary.action,
+        );
+        for (const fragment of fragments) {
+          yield dataStarPatchElementsSSE(fragment);
+        }
+      }
+      request.signal.addEventListener("abort", () => {
+        if (unsubscribePing) unsubscribePing?.();
+        unregisterSessionManager(cacheKey);
+      });
     } else {
-      // If session manager already exists, get current state and render fresh fragments
+      // If session manager already exists, bump ref count and render fresh fragments
+      registerSessionManager(cacheKey, () => {}); // increments refs only
       const currentState = getSessionCurrentState(cacheKey);
       if (currentState) {
         const fragments = buildFragments(
@@ -91,7 +113,6 @@ export const effectSessionsPlugin = new Elysia({
 
       request.signal.addEventListener("abort", () => {
         if (unsubscribePing) unsubscribePing();
-        // Unregister session manager when stream closes
         unregisterSessionManager(cacheKey);
       });
     }

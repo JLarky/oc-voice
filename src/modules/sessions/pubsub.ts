@@ -41,6 +41,7 @@ export const sessionManagers = new Map<
   string,
   {
     dispose: () => void;
+    refs: number;
   }
 >();
 
@@ -49,12 +50,22 @@ export const sessionManagers = new Map<
  * The manager is responsible for shared logic (polling, summarization, etc.)
  * Call the returned dispose function when cleaning up
  */
+interface InternalSessionManagerEntry {
+  dispose: () => void;
+  refs: number;
+}
+
 export function registerSessionManager(
   cacheKey: string,
   dispose: () => void,
 ): void {
-  if (!sessionManagers.has(cacheKey)) {
-    sessionManagers.set(cacheKey, { dispose });
+  const existing = sessionManagers.get(cacheKey) as
+    | InternalSessionManagerEntry
+    | undefined;
+  if (existing) {
+    existing.refs += 1;
+  } else {
+    (sessionManagers as any).set(cacheKey, { dispose, refs: 1 });
   }
 }
 
@@ -62,10 +73,15 @@ export function registerSessionManager(
  * Unregister a session manager when all streams have disconnected
  */
 export function unregisterSessionManager(cacheKey: string): void {
-  const manager = sessionManagers.get(cacheKey);
+  const manager = sessionManagers.get(cacheKey) as
+    | InternalSessionManagerEntry
+    | undefined;
   if (manager) {
-    manager.dispose();
-    sessionManagers.delete(cacheKey);
+    manager.refs -= 1;
+    if (manager.refs <= 0) {
+      manager.dispose();
+      sessionManagers.delete(cacheKey);
+    }
   }
 }
 

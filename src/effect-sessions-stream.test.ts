@@ -20,15 +20,18 @@ describe("effect sessions SSE stream", () => {
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
     let buf = "";
-    for (let i = 0; i < 5; i++) {
-      // allow a few flush cycles
+    for (let i = 0; i < 8; i++) {
       const { value, done } = await reader.read();
       if (done) break;
-      if (typeof value === 'string') { buf += value; } else if (value) { buf += decoder.decode(value); }
-      if (buf.includes("messages-status")) break;
+      if (typeof value === "string") buf += value;
+      else if (value) buf += decoder.decode(value);
+      if (buf.includes("messages-status") && buf.match(/id=\"messages-list\"/))
+        break;
     }
     controller.abort();
     expect(buf).toContain("event: datastar-patch-elements");
     expect(buf).toMatch(/data: elements <div id=\"messages-status\"/);
+    // Expect recent messages fragment (messages-list) also emitted early (may be empty list markup)
+    expect(buf).toMatch(/data: elements <div id=\"messages-list\"/);
   });
 });

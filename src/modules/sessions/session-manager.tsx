@@ -49,6 +49,14 @@ startSummaryCachePruner();
 
 export function buildFragments(msgs: Msg[], summary: string, action: boolean) {
   const trimmed = msgs.length > 50 ? msgs.slice(-50) : msgs;
+  // Adapt Msg[] -> TextMessage[] expected by AdvancedRecentMessages
+  const adapted = trimmed.map((m) => ({
+    role: m.role,
+    texts: m.text.split("\n").filter(Boolean),
+    timestamp: m.timestamp,
+    text: m.text,
+    parts: m.parts,
+  }));
   const status = (
     <div
       id="messages-status"
@@ -57,7 +65,7 @@ export function buildFragments(msgs: Msg[], summary: string, action: boolean) {
   );
   const recent = (
     <AdvancedRecentMessages
-      messages={trimmed}
+      messages={adapted as any}
       summaryText={summary}
       actionFlag={action}
       totalCount={msgs.length}
@@ -95,13 +103,34 @@ export function createSessionManager(
   let pollInterval: NodeJS.Timeout;
   let summaryInterval: NodeJS.Timeout;
 
-  // Send initial fragments immediately
+  // Publish initial fragments immediately (empty msgs / cached summary) so
+  // connected streams get early UI without waiting on remote fetch. Then
+  // kick off async fetch to update and re-emit if messages exist.
   {
     const fragments = buildFragments(msgs, summary.summary, summary.action);
-    for (const fragment of fragments) {
+    for (const fragment of fragments)
       publishElementToStreams(cacheKey, fragment);
-    }
   }
+  (async () => {
+    try {
+      const raw = await listMessages(remoteBase, sid);
+      msgs = raw.map((m) => ({
+        role: m.role,
+        text: m.texts.join("\n"),
+        parts: m.texts.map((t: string) => ({ type: "text", text: t })),
+        timestamp: m.timestamp,
+      }));
+      lastCount = msgs.length;
+      const fragments = buildFragments(msgs, summary.summary, summary.action);
+      for (const fragment of fragments)
+        publishElementToStreams(cacheKey, fragment);
+    } catch (e) {
+      console.error(
+        "session-manager initial listMessages error",
+        (e as Error).message,
+      );
+    }
+  })();
 
   // Start message polling (every 400ms)
   pollInterval = setInterval(async () => {
@@ -114,7 +143,8 @@ export function createSessionManager(
         (e as Error).message,
       );
     }
-    const msgs = raw.map((m) => ({
+    // Reassign outer msgs (avoid shadowing) so summary logic sees updates
+    msgs = raw.map((m) => ({
       role: m.role,
       text: m.texts.join("\n"),
       parts: m.texts.map((t: string) => ({ type: "text", text: t })),
