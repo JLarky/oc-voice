@@ -65,6 +65,7 @@ liftHtml("speech-button", {
     let lastSpoken = "";
     let pending: string | null = null;
     let currentUtter: SpeechSynthesisUtterance | null = null;
+    const recentAutoSpoken: string[] = [];
 
     if (!readBtn) {
       // No markup supplied: create all three buttons.
@@ -173,6 +174,11 @@ liftHtml("speech-button", {
       } catch {}
       currentUtter = new SpeechSynthesisUtterance(summary);
       lastSpoken = summary;
+      // Track last 3 auto-spoken summaries
+      if (!recentAutoSpoken.includes(summary)) {
+        recentAutoSpoken.push(summary);
+        while (recentAutoSpoken.length > 3) recentAutoSpoken.shift();
+      }
       pending = null;
       currentUtter.onend = () => {
         currentUtter = null;
@@ -195,6 +201,7 @@ liftHtml("speech-button", {
       );
     }
     function considerAutoSpeak(summary: string) {
+      if (recentAutoSpoken.includes(summary)) return;
       if (!isPlaying) return;
       if (!summary || isPlaceholder(summary)) return;
       if (currentUtter) {

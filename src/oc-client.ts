@@ -36,7 +36,7 @@ function errMsg(e: unknown): string {
 }
 
 export const FIRST_MESSAGE_INSTRUCTION =
-  "I'm driving right now, because i use voice-to-text don't be afraid to ask for clarification. You don't need to be very terse when you respond, I use voice-to-text feature that will summarize your response for me, and once I part I can take a look at the code or your full responses. Also try to not mention that I use voice-to-text feature. Only commit changes if I ask for it. Never push or create PRs, I will do that myself later. Okay, so here it goes:";
+  "I'm driving right now, because i use voice-to-text don't be afraid to ask for clarification. You don't need to be very terse when you respond, I use voice-to-text feature that will summarize your response for me, and once I park I can take a look at the code or your full responses. To activate text-to-speech make sure that last line of your last response is a short command 'utter: <your text>'. Okay, so here it goes:";
 
 export async function listMessages(
   remoteHost: string,
@@ -269,7 +269,7 @@ export async function ensureSummarizer(
 }
 
 export const summarizationPrompt =
-  "Summarize the following conversation. You are acting on a behalf of the assistant. Whatever you are going to reply is going to be said out loud with TTS system. Please give a voice to the assistant. Respond in <=18 words. If your message doesn't fit ask user to look at the screen instead of using TTS.";
+  "Please respond with a <=18 words phrase that best describes when assistant wants to say or ask from user. If the assistant used 'utter' command, make sure to say only the text that was uttered, don't add anything to it. Your response will be used in TTS so don't say something that is hard to say out loud.";
 
 // Summarize recent messages using dedicated summarizer session.
 // recentMessages: array of last messages with role + text
@@ -332,7 +332,7 @@ export async function summarizeMessages(
         ok: false,
         error: sendCombined.error || "Summarize send failed",
       };
-    const raw = sendCombined.replyTexts.join("\n").trim();
+    const raw = sendCombined.replyTexts.join("\n").replace("utter:", "").trim();
     const action = /\|\s*action\s*=\s*yes/i.test(raw);
     return { summary: raw, action, raw, ok: true };
   } catch (e) {
