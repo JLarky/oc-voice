@@ -24,7 +24,7 @@ describe("effect sessions SSE stream", () => {
       // allow a few flush cycles
       const { value, done } = await reader.read();
       if (done) break;
-      buf += decoder.decode(value);
+      if (typeof value === 'string') { buf += value; } else if (value) { buf += decoder.decode(value); }
       if (buf.includes("messages-status")) break;
     }
     controller.abort();
