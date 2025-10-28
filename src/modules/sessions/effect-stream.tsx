@@ -1,6 +1,6 @@
 import { Elysia } from "elysia";
 import * as v from "valibot";
-import { dataStarPatchElementsString } from "../../../rendering/datastar";
+import { dataStarPatchElementsSSE } from "../../../rendering/datastar";
 import { doesIpExist } from "../../utils/store-ips";
 import {
   subscribe,
@@ -10,41 +10,66 @@ import {
   sessionManagers,
   getSessionCurrentState,
 } from "./pubsub";
-import { createSessionManager, buildFragments, Msg } from "./session-manager";
+import { createSessionManager, buildFragments } from "./session-manager";
 import { buildCacheKey, remoteBaseFromIp } from "./cache-key";
+import { JSX } from "preact";
+import { Chunk, Effect, Stream, StreamEmit, Option } from "effect";
 
 export const effectSessionsPlugin = new Elysia({
   name: "sessions-effect-stream",
 }).get(
   "/sessions/:ip/:sid/effect/stream",
-  async ({ params, request }) => {
+  async function* ({ params, request }) {
     const { ip, sid } = params;
     if (!ip || !sid || !(await doesIpExist(ip)))
       return new Response("Unknown IP", { status: 404 });
     const remoteBase = remoteBaseFromIp(ip);
     const cacheKey = buildCacheKey(ip, sid);
-    startTimer();
 
-    const encoder = new TextEncoder();
-    const queue: string[] = [];
-    let aborted = false;
+    function onAbort(cb: () => void) {
+      request.signal.addEventListener("abort", cb, { once: true });
+    }
+
+    /** Stream closes once request is aborted */
+    const abortStream = Stream.async(
+      (emit: StreamEmit.Emit<never, never, "abort", void>) => {
+        onAbort(() => {
+          emit(Effect.succeed(Chunk.of("abort")));
+          emit(Effect.fail(Option.none()));
+        });
+      },
+    );
+
+    startTimer();
 
     // Subscribe to typed session messages FIRST, before registering session manager
     let unsubscribePing: (() => void) | null = null;
-    unsubscribePing = subscribe(cacheKey, (message) => {
-      if (message.type === "updated-at") {
-        const status = (
-          <div
-            id="messages-status"
-            className="status"
-          >{`Updated ${message.time.toLocaleTimeString()}`}</div>
-        );
-        queue.push(dataStarPatchElementsString(status));
-      } else if (message.type === "publish-element") {
-        // Shared session manager is publishing an element to this stream
-        queue.push(dataStarPatchElementsString(message.element));
-      }
-    });
+
+    const timerStream = Stream.async(
+      (emit: StreamEmit.Emit<never, never, JSX.Element, void>) => {
+        unsubscribePing = subscribe(cacheKey, (message) => {
+          if (message.type === "updated-at") {
+            const status = (
+              <div
+                id="messages-status"
+                className="status"
+              >{`Updated ${message.time.toLocaleTimeString()}`}</div>
+            );
+            emit(Effect.succeed(Chunk.of(status)));
+          } else if (message.type === "publish-element") {
+            // Shared session manager is publishing an element to this stream
+            emit(Effect.succeed(Chunk.of(message.element)));
+          }
+        });
+        onAbort(() => emit(Effect.fail(Option.none())));
+      },
+    );
+
+    yield dataStarPatchElementsSSE(
+      <div id="messages-status" class="status">
+        Updating...
+      </div>,
+    );
 
     // NOW register session manager (which will publish initial updates)
     if (!sessionManagers.has(cacheKey)) {
@@ -55,60 +80,35 @@ export const effectSessionsPlugin = new Elysia({
       const currentState = getSessionCurrentState(cacheKey);
       if (currentState) {
         const fragments = buildFragments(
-          currentState.msgs as Msg[],
+          currentState.msgs,
           currentState.summary.summary,
           currentState.summary.action,
         );
         for (const fragment of fragments) {
-          queue.push(dataStarPatchElementsString(fragment));
+          yield dataStarPatchElementsSSE(fragment);
         }
       }
-    }
 
-    const stream = new ReadableStream({
-      start(controller) {
-        let closed = false;
-        const flush = () => {
-          if (aborted) {
-            if (!closed) {
-              closed = true;
-              try {
-                controller.close();
-              } catch (_) {}
-            }
-            return;
-          }
-          if (queue.length) {
-            const out = queue.splice(0, queue.length);
-            for (const frag of out) controller.enqueue(encoder.encode(frag));
-          }
-          setTimeout(flush, 100);
-        };
-        setTimeout(flush, 0);
-      },
-      cancel() {
-        aborted = true;
+      request.signal.addEventListener("abort", () => {
         if (unsubscribePing) unsubscribePing();
         // Unregister session manager when stream closes
         unregisterSessionManager(cacheKey);
-      },
-    });
+      });
+    }
 
-    request.signal.addEventListener("abort", () => {
-      aborted = true;
-      if (unsubscribePing) unsubscribePing();
-      // Unregister session manager when stream closes
-      unregisterSessionManager(cacheKey);
-    });
-
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream; charset=utf-8",
-        "Cache-Control": "no-cache, no-transform",
-        Connection: "keep-alive",
-        "Access-Control-Allow-Origin": "*",
-      },
-    });
+    for await (const x of Stream.toAsyncIterable(
+      Stream.merge(timerStream, abortStream),
+    )) {
+      if (x === "abort") {
+        return;
+      } else {
+        if (!request.signal.aborted) {
+          yield dataStarPatchElementsSSE(x);
+        } else {
+          console.log("aborted, but", sid, x);
+        }
+      }
+    }
   },
   {
     params: v.object({ ip: v.string(), sid: v.string() }),
