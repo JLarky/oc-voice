@@ -10,7 +10,7 @@ export function SessionDetailPage(props: SessionDetailProps) {
   const title = props.sessionTitle || props.sessionId || "Session";
   return (
     <Layout title={`Session ${title}`} needsDatastar={true} needsClient={true}>
-      <h1>{title}</h1>
+      <h1 style={{ "word-break": "break-word" }}>{title}</h1>
       <div>
         <a href={`/sessions/${props.ip}`}>← Back to sessions for {props.ip}</a>
       </div>
