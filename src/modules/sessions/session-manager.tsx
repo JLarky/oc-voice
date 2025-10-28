@@ -91,8 +91,8 @@ export function createSessionManager(
     summary.lastHash = existing.hash;
   }
   let lastCount = 0;
-  let pollInterval: any;
-  let summaryInterval: any;
+  let pollInterval: NodeJS.Timeout;
+  let summaryInterval: NodeJS.Timeout;
 
   // Send initial fragments immediately
   {
