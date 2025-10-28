@@ -226,15 +226,18 @@ liftHtml("speech-button", {
       obs.observe(list, { childList: true, subtree: true });
     }
     const intervalId = setInterval(updateUIAndAuto, 3000);
-    // Capture initial summary to ignore once
-    const initialSummary = extractSummary();
-    let initialConsumed = false;
+    // Suppress auto TTS for the first real (non-placeholder) summary present when page loads.
+    // Arm autoplay only AFTER we have seen one non-placeholder summary and do not speak it.
+    let ttsArmed = false;
     function updateUIAndAuto() {
       const s = extractSummary();
       if (s) readBtn!.title = s;
-      if (!initialConsumed) {
-        if (s !== initialSummary) initialConsumed = true; // changed -> future summaries allowed
-        return; // ignore first encountered
+      if (!ttsArmed) {
+        if (!s || isPlaceholder(s)) return; // still waiting for a real summary
+        // First real summary encountered: mark as spoken baseline without speaking it.
+        lastSpoken = s;
+        ttsArmed = true;
+        return;
       }
       considerAutoSpeak(s);
     }
