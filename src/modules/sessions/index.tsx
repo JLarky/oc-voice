@@ -6,7 +6,7 @@ import { doesIpExist } from "../../utils/store-ips";
 import { listMessages } from "../../oc-client";
 import { shouldReuseSummary } from "../../hash";
 import { Msg } from "./session-manager";
-import { buildCacheKey, remoteBaseFromIp } from './cache-key';
+import { buildCacheKey, remoteBaseFromIp } from "./cache-key";
 
 export const sessionsPlugin = new Elysia({ name: "sessions-messages" }).get(
   "/sessions/:ip/:sid/messages/stream",

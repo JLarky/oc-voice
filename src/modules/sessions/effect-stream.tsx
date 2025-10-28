@@ -11,7 +11,7 @@ import {
   getSessionCurrentState,
 } from "./pubsub";
 import { createSessionManager, buildFragments, Msg } from "./session-manager";
-import { buildCacheKey, remoteBaseFromIp } from './cache-key';
+import { buildCacheKey, remoteBaseFromIp } from "./cache-key";
 
 export const effectSessionsPlugin = new Elysia({
   name: "sessions-effect-stream",

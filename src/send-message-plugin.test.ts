@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { buildCacheKey } from './modules/sessions/cache-key';
+import { buildCacheKey } from "./modules/sessions/cache-key";
 import { Elysia } from "elysia";
 import { sendMessagePlugin } from "./modules/sessions/send-message";
 import { addIp } from "./utils/store-ips";

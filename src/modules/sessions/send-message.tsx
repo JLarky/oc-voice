@@ -13,7 +13,7 @@ import * as v from "valibot";
 const firstMessageSeen = new Set<string>();
 const inFlightFirstMessage: Record<string, boolean> = {};
 
-import { buildCacheKey, remoteBaseFromIp } from './cache-key';
+import { buildCacheKey, remoteBaseFromIp } from "./cache-key";
 
 export const sendMessagePlugin = new Elysia({
   name: "sessions-send-message",
