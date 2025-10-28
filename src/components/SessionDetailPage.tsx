@@ -38,6 +38,9 @@ export function SessionDetailPage(props: SessionDetailProps) {
           </div>
         </div>
       </messages-wrapper>
+      <div style={{ height: "100px", overflow: "auto" }}>
+        <div id="debug-log" class="status" data-keep></div>
+      </div>
       <h2>Send Message</h2>
       <form
         id="session-message-form"

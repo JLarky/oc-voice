@@ -25,6 +25,10 @@ export const effectSessionsPlugin = new Elysia({
       return new Response("Unknown IP", { status: 404 });
     const remoteBase = remoteBaseFromIp(ip);
     const cacheKey = buildCacheKey(ip, sid);
+    const referrer = request.headers.get("referer") || "";
+    const debug = URL.canParse(referrer)
+      ? new URL(referrer).searchParams.get("debug") === "1"
+      : false;
 
     function onAbort(cb: () => void) {
       request.signal.addEventListener("abort", cb, { once: true });
@@ -70,6 +74,13 @@ export const effectSessionsPlugin = new Elysia({
         Updating...
       </div>,
     );
+    if (debug) {
+      yield dataStarPatchElementsSSE(
+        <div id="debug-log" class="status" data-keep>
+          debug mode on
+        </div>,
+      );
+    }
 
     // Yield initial empty fragments (messages-list) immediately for quick UI
     for (const fragment of buildFragments([], "(no recent messages)", false)) {
@@ -78,7 +89,7 @@ export const effectSessionsPlugin = new Elysia({
 
     // NOW register session manager (which will publish initial updates)
     if (!sessionManagers.has(cacheKey)) {
-      const dispose = createSessionManager(cacheKey, remoteBase, sid);
+      const dispose = createSessionManager(cacheKey, remoteBase, sid, debug);
       registerSessionManager(cacheKey, dispose);
       // Immediately render current (possibly empty) fragments so list appears early
       const currentState = getSessionCurrentState(cacheKey);
