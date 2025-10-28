@@ -53,7 +53,7 @@ export const effectSessionsPlugin = new Elysia({
               <div
                 id="messages-status"
                 className="status"
-              >{`Updated ${message.time.toLocaleTimeString()}`}</div>
+              >{`Updated ${new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:'America/Denver'}).format(message.time)}`}</div>
             );
             emit(Effect.succeed(Chunk.of(status)));
           } else if (message.type === "publish-element") {

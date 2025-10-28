@@ -12,6 +12,10 @@ function isTextPart(p: any): p is TextPart {
 
 interface MessageInfo {
   role?: string;
+  time?: {
+    created: number;
+    completed: number;
+  };
 }
 
 interface Message {
@@ -21,9 +25,10 @@ interface Message {
   data?: any;
 }
 
-interface TextMessage {
+export interface TextMessage {
   role: string;
   texts: string[];
+  timestamp?: Date;
 }
 
 function errMsg(e: unknown): string {
@@ -43,9 +48,14 @@ export async function listMessages(
   return messages
     .map((msg: Message) => {
       const role = msg.info?.role || "message";
+      const timestamp = msg.info?.time?.completed || msg.info?.time?.created;
       const textParts = (msg.parts || []).filter((p) => p.type === "text");
       const texts = textParts.map((p) => p.text || "").filter(Boolean);
-      return { role, texts };
+      return {
+        role,
+        texts,
+        timestamp: timestamp ? new Date(timestamp) : undefined,
+      };
     })
     .filter((msg) => msg.texts.length > 0);
 }

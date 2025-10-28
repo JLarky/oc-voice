@@ -1,6 +1,7 @@
 // fragments.tsx - small JSX helpers for HTML fragments previously in server.ts
 import { h } from "preact";
 import { MessageItems, Msg } from "./MessageItems";
+import { TextMessage } from "../src/oc-client";
 // Mirror AttemptRecord from server (subset for display)
 interface AttemptRecord {
   url?: string;
@@ -130,7 +131,7 @@ function AdvancedEvents({ events, attempts, stateJson }: AdvancedEventsProps) {
 }
 // Advanced recent messages fragment (last <=10 messages derived from aggregated state)
 interface AdvancedRecentMessagesProps {
-  messages: Msg[];
+  messages: TextMessage[];
   summaryText?: string;
   actionFlag?: boolean;
   totalCount?: number;

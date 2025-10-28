@@ -7,7 +7,23 @@ interface LayoutProps {
   children: preact.ComponentChildren;
 }
 
-const BASE_STYLE = `body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:900px;margin-left:auto;margin-right:auto;} a{color:#0366d6;} input,textarea,button{padding:.5rem;font-size:.95rem;border:1px solid #ccc;border-radius:3px;} button{background:#0366d6;color:white;cursor:pointer;border:none;} button:hover{background:#0256c7;} .row{display:flex;gap:.5rem;margin-bottom:.5rem;} .status{font-size:.75rem;color:#666;margin-bottom:1rem;} .result{font-size:.75rem;color:#666;margin-top:.5rem;} #messages-list{border:1px solid #ddd;padding:1rem;border-radius:4px;margin-top:1rem;max-height:400px;overflow-y:auto;} .message{padding:.5rem;border-bottom:1px solid #eee;font-size:.9rem;} .message-role{font-weight:bold;color:#0366d6;} .message-text{margin-top:.25rem;white-space:pre-wrap;word-break:break-word;}  .session-id{font-size:.6rem;color:#666;margin-top:.25rem;margin-bottom:1rem;}`;
+const css = String.raw;
+const BASE_STYLE = css`
+  body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:900px;margin-left:auto;margin-right:auto;}
+  a{color:#0366d6;}
+  input,textarea,button{padding:.5rem;font-size:.95rem;border:1px solid #ccc;border-radius:3px;}
+  button{background:#0366d6;color:white;cursor:pointer;border:none;}
+  button:hover{background:#0256c7;}
+  .row{display:flex;gap:.5rem;margin-bottom:.5rem;}
+  .status{font-size:.75rem;color:#666;margin-bottom:1rem;}
+  .result{font-size:.75rem;color:#666;margin-top:.5rem;}
+  #messages-list{border:1px solid #ddd;padding:1rem;border-radius:4px;margin-top:1rem;max-height:400px;overflow-y:auto;}
+  .message{padding:.5rem;border-bottom:1px solid #eee;font-size:.9rem;}
+  .message-role{font-weight:bold;color:#0366d6;}
+  .message-text{margin-top:.25rem;white-space:pre-wrap;word-break:break-word;}
+  .session-id{font-size:.6rem;color:#666;margin-top:.25rem;margin-bottom:1rem;}
+  .message-ts{font-size:.65rem;color:#555;font-weight:normal;}
+`;
 
 export function Layout({
   title,

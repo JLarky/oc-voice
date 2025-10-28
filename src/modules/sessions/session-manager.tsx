@@ -1,5 +1,5 @@
 import { AdvancedRecentMessages } from "../../../rendering/fragments";
-import { listMessages, summarizeMessages } from "../../oc-client";
+import { listMessages, summarizeMessages, TextMessage } from "../../oc-client";
 import { shouldReuseSummary } from "../../hash";
 import { publishElementToStreams } from "./pubsub";
 import { JSX } from "preact";
@@ -8,6 +8,7 @@ export interface Msg {
   role: string;
   text: string;
   parts: { type: "text"; text: string }[];
+  timestamp?: Date;
 }
 
 export interface SummaryState {
@@ -52,7 +53,7 @@ export function buildFragments(msgs: Msg[], summary: string, action: boolean) {
     <div
       id="messages-status"
       className="status"
-    >{`Updated ${new Date().toLocaleTimeString()}`}</div>
+    >{`Updated ${new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Denver" }).format(new Date())}`}</div>
   );
   const recent = (
     <AdvancedRecentMessages
@@ -104,7 +105,7 @@ export function createSessionManager(
 
   // Start message polling (every 400ms)
   pollInterval = setInterval(async () => {
-    let raw: { role: string; texts: string[] }[] = [];
+    let raw: TextMessage[] = [];
     try {
       raw = await listMessages(remoteBase, sid);
     } catch (e) {
@@ -113,10 +114,11 @@ export function createSessionManager(
         (e as Error).message,
       );
     }
-    msgs = raw.map((m) => ({
+    const msgs = raw.map((m) => ({
       role: m.role,
       text: m.texts.join("\n"),
       parts: m.texts.map((t: string) => ({ type: "text", text: t })),
+      timestamp: m.timestamp,
     }));
     if (msgs.length !== lastCount) {
       lastCount = msgs.length;
