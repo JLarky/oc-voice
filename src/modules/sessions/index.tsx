@@ -35,6 +35,8 @@ export const sessionsPlugin = new Elysia({ name: "sessions-messages" }).get(
             role: m.role,
             text: m.texts.join("\n"),
             parts: m.texts.map((t) => ({ type: "text", text: t })),
+            timestamp: m.timestamp,
+            isGenerating: m.isGenerating,
           }));
         } catch (e) {
           console.error(

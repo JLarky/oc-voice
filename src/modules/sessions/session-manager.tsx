@@ -9,6 +9,7 @@ export interface Msg {
   text: string;
   parts: { type: "text"; text: string }[];
   timestamp?: Date;
+  isGenerating?: boolean;
 }
 
 export interface SummaryState {
@@ -56,6 +57,7 @@ export function buildFragments(msgs: Msg[], summary: string, action: boolean) {
     timestamp: m.timestamp,
     text: m.text,
     parts: m.parts,
+    isGenerating: m.isGenerating,
   }));
   const status = (
     <div
@@ -142,6 +144,7 @@ export function createSessionManager(
         text: m.texts.join("\n"),
         parts: m.texts.map((t: string) => ({ type: "text", text: t })),
         timestamp: m.timestamp,
+        isGenerating: m.isGenerating,
       }));
       lastCount = msgs.length;
       const fragments = buildFragments(msgs, summary.summary, summary.action);
@@ -176,6 +179,7 @@ export function createSessionManager(
         text: m.texts.join("\n"),
         parts: m.texts.map((t: string) => ({ type: "text", text: t })),
         timestamp: m.timestamp,
+        isGenerating: m.isGenerating,
       }));
       let changed = false;
       if (msgs.length !== lastCount) {

@@ -10,6 +10,7 @@ export interface Msg {
   parts?: MsgPart[];
   text?: string;
   timestamp?: Date;
+  isGenerating?: boolean;
 }
 interface MessageItemsProps {
   messages: Msg[];
@@ -30,13 +31,17 @@ export function MessageItems({ messages }: MessageItemsProps) {
               timeZone: "America/Denver",
             }).format(m.timestamp)
           : "";
+        const displayText = m.isGenerating && !text ? "Generating..." : text;
         return (
           <div class="message" key={i}>
             <div class="message-role">
               {role}
               {ts && <span class="message-ts"> {ts}</span>}
+              {m.isGenerating && (
+                <span style="opacity:0.6;margin-left:6px">(generating)</span>
+              )}
             </div>
-            <div class="message-text">{text}</div>
+            <div class="message-text">{displayText}</div>
           </div>
         );
       })}

@@ -336,6 +336,8 @@ async function fetchMessages(ip: string, sessionId: string) {
       role: msg.role,
       text: msg.texts.join("\n"),
       parts: msg.texts.map((text) => ({ type: "text", text })),
+      timestamp: msg.timestamp,
+      isGenerating: msg.isGenerating,
     }));
   } catch (e) {
     console.error(

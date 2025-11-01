@@ -29,6 +29,7 @@ export interface TextMessage {
   role: string;
   texts: string[];
   timestamp?: Date;
+  isGenerating?: boolean;
 }
 
 function errMsg(e: unknown): string {
@@ -45,19 +46,35 @@ export async function listMessages(
   const rawRes = await fetch(`${remoteHost}/session/${sessionId}/message`);
   const messages: Message[] = await rawRes.json();
   if (!Array.isArray(messages)) return [];
-  return messages
+  const result = messages
     .map((msg: Message) => {
       const role = msg.info?.role || "message";
-      const timestamp = msg.info?.time?.completed || msg.info?.time?.created;
+      const timeObj = msg.info?.time;
+      const hasCreated =
+        timeObj && "created" in timeObj && timeObj.created != null;
+      const hasCompleted =
+        timeObj && "completed" in timeObj && timeObj.completed != null;
+      const timestamp = hasCompleted
+        ? timeObj.completed
+        : hasCreated
+          ? timeObj.created
+          : undefined;
       const textParts = (msg.parts || []).filter((p) => p.type === "text");
       const texts = textParts.map((p) => p.text || "").filter(Boolean);
+      // Message is generating if it has created time but no completed time
+      // Only assistant messages can be in generating state (user messages don't get completed timestamp)
+      const isGenerating = role === "assistant" && hasCreated && !hasCompleted;
+
       return {
         role,
         texts,
         timestamp: timestamp ? new Date(timestamp) : undefined,
+        isGenerating,
       };
     })
     .filter((msg) => msg.texts.length > 0);
+
+  return result;
 }
 
 export interface SendMessageResult {
