@@ -286,7 +286,7 @@ export async function ensureSummarizer(
 }
 
 export const summarizationPrompt =
-  "Please respond with a <=18 words phrase that best describes when assistant wants to say or ask from user. If the assistant used 'utter' command, make sure to say only the text that was uttered, don't add anything to it. Your response will be used in TTS so don't say something that is hard to say out loud.";
+  "Read those messages from an assistant. Understand if assistant is asking something from user or just reporting the status. If a question is asked or action from user is needed then reply with <= 18 words summary. If 'utter' command is used, say only the text that was uttered, don't add anything to it. If no action needed from user, reply '...'. If assistant didn't ask any questions or did't ask for clarification, reply '...'.";
 
 // Summarize recent messages using dedicated summarizer session.
 // recentMessages: array of last messages with role + text
