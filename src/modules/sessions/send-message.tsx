@@ -6,7 +6,7 @@ import {
   sendMessage as rawSendMessage,
   FIRST_MESSAGE_INSTRUCTION,
 } from "../../oc-client";
-import { publishElementToStreams } from "./pubsub";
+import { publishElementToStreams, notifyUserMessageSent } from "./pubsub";
 import * as v from "valibot";
 
 // Ephemeral tracking for first-message injection (session scoped)
@@ -75,6 +75,8 @@ export const sendMessagePlugin = new Elysia({
         Added to queue...
       </div>,
     );
+    // Immediately bump polling cadence so the new message appears quickly
+    notifyUserMessageSent(cacheKey);
     let failed = "";
     (async () => {
       const result = await rawSendMessage(remoteBaseFromIp(ip), sid, text);

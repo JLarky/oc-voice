@@ -234,6 +234,25 @@ export function getSessionCurrentState(cacheKey: string): {
 }
 
 /**
+ * Notify the session manager that a user message was sent
+ * This bumps polling to the fast cadence immediately
+ */
+export function notifyUserMessageSent(cacheKey: string): void {
+  const manager = sessionManagers.get(cacheKey) as
+    | { dispose: any; refs: number }
+    | undefined;
+  const notify =
+    manager && manager.dispose && manager.dispose.__notifyUserMessageSent;
+  if (typeof notify === "function") {
+    try {
+      notify();
+    } catch (e) {
+      console.warn("notifyUserMessageSent error", (e as Error).message);
+    }
+  }
+}
+
+/**
  * Get the number of active SSE subscriptions (connections) for a session
  */
 export function getSubscriptionCount(cacheKey: string): number {
