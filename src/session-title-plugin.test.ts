@@ -1,8 +1,7 @@
 import { describe, it, expect } from "bun:test";
-import "./index.tsx"; // ensure server started
-import { server } from "../server";
+import { Elysia } from "elysia";
+import { sessionTitlesPlugin } from "./modules/sessions/session-titles-plugin";
 import { addIp } from "./utils/store-ips";
-// use server.fetch to avoid global fetch overrides
 
 function escapeHtml(val: string): string {
   return val.replace(
@@ -14,18 +13,19 @@ function escapeHtml(val: string): string {
   );
 }
 
-addIp("127.0.0.1");
-
 describe("session-title-plugin", () => {
+  const app = new Elysia().use(sessionTitlesPlugin);
+  const base = "http://localhost";
+
   it("saves and returns escaped title fragment", async () => {
     const ip = "127.0.0.1";
     const sid = "sess-test-title";
-    const composite = ip + ":" + sid;
+    addIp(ip);
     // Persist description via title-save (acts like form submission)
     const form = new FormData();
     form.set("description", "Hello <World> & everyone");
-    const saveRes = await server.fetch(
-      new Request(`http://localhost:3000/sessions/${ip}/${sid}/title-save`, {
+    const saveRes = await app.handle(
+      new Request(`${base}/sessions/${ip}/${sid}/title-save`, {
         method: "POST",
         body: form,
       }),
@@ -34,8 +34,8 @@ describe("session-title-plugin", () => {
     const saveHtml = await saveRes.text();
     expect(saveHtml).toContain(escapeHtml("Hello <World> & everyone"));
     // Fetch edit fragment to verify prefill signal
-    const editRes = await server.fetch(
-      new Request(`http://localhost:3000/sessions/${ip}/${sid}/title-edit`),
+    const editRes = await app.handle(
+      new Request(`${base}/sessions/${ip}/${sid}/title-edit`),
     );
     expect(editRes.status).toBe(200);
     const editHtml = await editRes.text();
@@ -46,12 +46,13 @@ describe("session-title-plugin", () => {
   it("sanitizes whitespace and length", async () => {
     const ip = "127.0.0.1";
     const sid = "sess-whitespace";
+    addIp(ip);
     const long = "A".repeat(400);
     const messy = "  Foo\n\nBar\tBaz   " + long;
     const form = new FormData();
     form.set("description", messy);
-    const res = await server.fetch(
-      new Request(`http://localhost:3000/sessions/${ip}/${sid}/title-save`, {
+    const res = await app.handle(
+      new Request(`${base}/sessions/${ip}/${sid}/title-save`, {
         method: "POST",
         body: form,
       }),
