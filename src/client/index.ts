@@ -7,6 +7,7 @@ liftHtml("messages-wrapper", {
     const root = this as HTMLElement;
     let rafId: number | null = null;
     const scroll = () => {
+      if ((window as any).__speechIsPlaying === false) return;
       if (rafId !== null) cancelAnimationFrame(rafId);
       const list = root.querySelector("#messages-list") as HTMLElement | null;
       if (!list) return;
@@ -57,10 +58,12 @@ liftHtml("speech-button", {
     let playPause: HTMLButtonElement | null = null;
     let testBtn: HTMLButtonElement | null = null;
     let isPlaying = true;
+    (window as any).__speechIsPlaying = true;
     const LS_KEY = "speechAutoPlay";
     try {
       const stored = localStorage.getItem(LS_KEY);
       if (stored === "false") isPlaying = false;
+      (window as any).__speechIsPlaying = isPlaying;
     } catch {}
     let lastSpoken = "";
     let pending: string | null = null;
@@ -104,6 +107,7 @@ liftHtml("speech-button", {
     if (playPause) {
       playPause.addEventListener("click", () => {
         isPlaying = !isPlaying;
+        (window as any).__speechIsPlaying = isPlaying;
         playPause!.textContent = isPlaying ? "Pause" : "Play";
         try {
           localStorage.setItem(LS_KEY, String(isPlaying));
