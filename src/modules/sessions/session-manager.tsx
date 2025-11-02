@@ -1,7 +1,7 @@
 import { AdvancedRecentMessages } from "../../../rendering/fragments";
 import { listMessages, summarizeMessages, TextMessage } from "../../oc-client";
 import { shouldReuseSummary } from "../../hash";
-import { publishElementToStreams } from "./pubsub";
+import { publishElementToStreams, getSubscriptionCount } from "./pubsub";
 import { JSX } from "preact";
 
 export interface Msg {
@@ -117,6 +117,10 @@ export function createSessionManager(
   let lastChangeTs = Date.now();
   let timeSinceLastChange = 0;
 
+  // Track inactivity for cleanup
+  const INACTIVITY_TIMEOUT_MS = 30 * 1000; // 30 seconds
+  let lastActiveSubscriptionTs = Date.now();
+
   // Latency-based throttling to prevent server overload
   let pollInFlight = false; // Prevent overlapping API calls
   let recentResponseTimes: number[] = []; // Track last few response times
@@ -193,6 +197,11 @@ export function createSessionManager(
   }
 
   async function pollAndUpdate() {
+    // Update activity timestamp if subscriptions are active
+    if (getSubscriptionCount(cacheKey) > 0) {
+      lastActiveSubscriptionTs = Date.now();
+    }
+
     // Prevent overlapping calls
     if (pollInFlight) {
       if (debug) {
@@ -303,6 +312,11 @@ export function createSessionManager(
       publishElementToStreams(cacheKey, fragment);
   }
   (async () => {
+    // Update activity timestamp if subscriptions are active
+    if (getSubscriptionCount(cacheKey) > 0) {
+      lastActiveSubscriptionTs = Date.now();
+    }
+
     pushDebug("initial listMessages fetch start");
     try {
       const raw = await listMessages(remoteBase, sid);
@@ -332,6 +346,26 @@ export function createSessionManager(
   // Start adaptive message polling
   scheduleNextPoll();
 
+  // Cleanup timer: kill session after 2 minutes of inactivity
+  const cleanupInterval = setInterval(() => {
+    const subscriptionCount = getSubscriptionCount(cacheKey);
+    if (subscriptionCount === 0) {
+      const inactiveFor = Date.now() - lastActiveSubscriptionTs;
+      if (inactiveFor >= INACTIVITY_TIMEOUT_MS) {
+        console.log(
+          `Disposing inactive session manager (${Math.round(inactiveFor / 1000)}s inactive)`,
+          { cacheKey },
+        );
+        if (pollInterval) clearTimeout(pollInterval);
+        clearInterval(summaryInterval);
+        clearInterval(cleanupInterval);
+        dispose();
+      }
+    } else {
+      lastActiveSubscriptionTs = Date.now();
+    }
+  }, 30000); // Check every 30 seconds
+
   // Start summary processing (every 200ms)
   const SUMMARY_DEBOUNCE_MS = 1500;
   const MIN_SUMMARY_INTERVAL_MS = 5000;
@@ -340,6 +374,11 @@ export function createSessionManager(
 
   summaryInterval = setInterval(
     async () => {
+      // Update activity timestamp if subscriptions are active
+      if (getSubscriptionCount(cacheKey) > 0) {
+        lastActiveSubscriptionTs = Date.now();
+      }
+
       const lastRole = msgs[msgs.length - 1]?.role;
       if (lastRole !== "assistant") {
         pushDebug("summary skip not-assistant");
@@ -456,6 +495,7 @@ export function createSessionManager(
   } = (() => {
     if (pollInterval) clearTimeout(pollInterval);
     clearInterval(summaryInterval);
+    clearInterval(cleanupInterval);
   }) as any;
 
   dispose.__getCurrentState = () => ({

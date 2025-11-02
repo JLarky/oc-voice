@@ -232,3 +232,11 @@ export function getSessionCurrentState(cacheKey: string): {
   }
   return null;
 }
+
+/**
+ * Get the number of active SSE subscriptions (connections) for a session
+ */
+export function getSubscriptionCount(cacheKey: string): number {
+  const handlers = subscriptions.get(cacheKey);
+  return handlers ? handlers.length : 0;
+}
