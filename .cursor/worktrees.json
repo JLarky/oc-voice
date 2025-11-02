@@ -1,0 +1,8 @@
+{
+  "setup-worktree": [
+    "mise install",
+    "mise run install",
+    "mise fmt",
+    "mise format"
+  ]
+}
