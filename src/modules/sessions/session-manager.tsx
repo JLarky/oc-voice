@@ -117,88 +117,163 @@ export function createSessionManager(
   let lastChangeTs = Date.now();
   let timeSinceLastChange = 0;
 
+  // Latency-based throttling to prevent server overload
+  let pollInFlight = false; // Prevent overlapping API calls
+  let recentResponseTimes: number[] = []; // Track last few response times
+  const MAX_RESPONSE_TIME_HISTORY = 5; // Keep last 5 response times
+  const SLOW_RESPONSE_THRESHOLD_MS = 1000; // Consider slow if >1s
+  const VERY_SLOW_RESPONSE_THRESHOLD_MS = 3000; // Consider very slow if >3s
+
+  function getAverageResponseTime(): number {
+    if (recentResponseTimes.length === 0) return 0;
+    const sum = recentResponseTimes.reduce((a, b) => a + b, 0);
+    return sum / recentResponseTimes.length;
+  }
+
   function scheduleNextPoll() {
+    // Don't schedule if already in-flight (prevents overlapping calls)
+    if (pollInFlight) {
+      if (debug) {
+        pushDebug("scheduleNextPoll: skipping (poll in-flight)");
+      }
+      return;
+    }
+
     const now = Date.now();
     timeSinceLastChange = now - lastChangeTs;
     const hasGenerating = msgs.some((m) => m.isGenerating === true);
+    const avgResponseTime = getAverageResponseTime();
 
-    // Determine polling interval based on activity level
-    let interval: number;
+    // Determine base polling interval based on activity level
+    let baseInterval: number;
     let state: string;
     if (hasGenerating || timeSinceLastChange < MEDIUM_IDLE_THRESHOLD_MS) {
       // Level 1: Active - generating or recent changes
-      interval = POLL_INTERVAL_FAST_MS;
+      baseInterval = POLL_INTERVAL_FAST_MS;
       state = hasGenerating
         ? "generating"
         : `active (${Math.round(timeSinceLastChange / 1000)}s ago)`;
     } else if (timeSinceLastChange < SLOW_IDLE_THRESHOLD_MS) {
       // Level 2: Medium idle - no activity for 10s-1min
-      interval = POLL_INTERVAL_MEDIUM_MS;
+      baseInterval = POLL_INTERVAL_MEDIUM_MS;
       state = `idle (${Math.round(timeSinceLastChange / 1000)}s ago)`;
     } else {
       // Level 3: Very idle - no activity for >1min
-      interval = POLL_INTERVAL_SLOW_MS;
+      baseInterval = POLL_INTERVAL_SLOW_MS;
       state = `very idle (${Math.round(timeSinceLastChange / 60)}min ago)`;
+    }
+
+    // Adjust interval based on API latency
+    // If responses are slow, back off to prevent overlapping calls
+    let adjustedInterval = baseInterval;
+    if (avgResponseTime > VERY_SLOW_RESPONSE_THRESHOLD_MS) {
+      // Very slow: wait at least 2x the response time to avoid overlap
+      adjustedInterval = Math.max(baseInterval, avgResponseTime * 2);
+      state += ` (slow API: ${Math.round(avgResponseTime)}ms)`;
+    } else if (avgResponseTime > SLOW_RESPONSE_THRESHOLD_MS) {
+      // Slow: wait at least 1.5x the response time
+      adjustedInterval = Math.max(baseInterval, avgResponseTime * 1.5);
+      state += ` (slow API: ${Math.round(avgResponseTime)}ms)`;
+    } else if (avgResponseTime > 0) {
+      state += ` (API: ${Math.round(avgResponseTime)}ms)`;
     }
 
     // Clear existing timeout and set new one
     if (pollInterval) clearTimeout(pollInterval);
 
     pollInterval = setTimeout(async () => {
-      scheduleNextPoll(); // Schedule next poll first (will re-evaluate interval)
-      await pollAndUpdate(); // Then execute poll
-    }, interval);
+      await pollAndUpdate(); // Execute poll (will schedule next inside)
+    }, adjustedInterval);
 
     if (debug) {
-      pushDebug(`poll interval: ${interval}ms [${state}]`);
+      pushDebug(
+        `poll interval: ${adjustedInterval}ms (base: ${baseInterval}ms) [${state}]`,
+      );
     }
   }
 
   async function pollAndUpdate() {
-    pushDebug("poll tick");
-    let raw: TextMessage[] = [];
-    try {
-      raw = await listMessages(remoteBase, sid);
-    } catch (e) {
-      console.error(
-        "session-manager poll listMessages error",
-        (e as Error).message,
-      );
-      scheduleNextPoll(); // Schedule next poll even on error
+    // Prevent overlapping calls
+    if (pollInFlight) {
+      if (debug) {
+        pushDebug("pollAndUpdate: skipping (already in-flight)");
+      }
+      scheduleNextPoll(); // Reschedule for later
       return;
     }
-    // Reassign outer msgs (avoid shadowing) so summary logic sees updates
-    msgs = raw.map((m) => ({
-      role: m.role,
-      text: m.texts.join("\n"),
-      parts: m.texts.map((t: string) => ({ type: "text", text: t })),
-      timestamp: m.timestamp,
-      isGenerating: m.isGenerating,
-    }));
-    let changed = false;
-    if (msgs.length !== lastCount) {
-      lastCount = msgs.length;
-      changed = true;
-    } else {
-      // Compute lightweight signature of last message text(s)
-      const tail = msgs
-        .slice(-3)
-        .map((m) => m.text)
-        .join("\n");
-      const sig = `${msgs.length}:${tail}`;
-      if (sig !== lastSignature) {
-        lastSignature = sig;
+
+    pollInFlight = true;
+    const pollStartTime = Date.now();
+    pushDebug("poll tick");
+
+    try {
+      let raw: TextMessage[] = [];
+      try {
+        raw = await listMessages(remoteBase, sid);
+      } catch (e) {
+        console.error(
+          "session-manager poll listMessages error",
+          (e as Error).message,
+        );
+        // On error, still record response time and schedule next
+        const responseTime = Date.now() - pollStartTime;
+        recentResponseTimes.push(responseTime);
+        if (recentResponseTimes.length > MAX_RESPONSE_TIME_HISTORY) {
+          recentResponseTimes.shift();
+        }
+        pollInFlight = false;
+        scheduleNextPoll();
+        return;
+      }
+
+      // Record response time
+      const responseTime = Date.now() - pollStartTime;
+      recentResponseTimes.push(responseTime);
+      if (recentResponseTimes.length > MAX_RESPONSE_TIME_HISTORY) {
+        recentResponseTimes.shift();
+      }
+
+      if (debug && responseTime > SLOW_RESPONSE_THRESHOLD_MS) {
+        pushDebug(`slow API response: ${responseTime}ms`);
+      }
+
+      // Reassign outer msgs (avoid shadowing) so summary logic sees updates
+      msgs = raw.map((m) => ({
+        role: m.role,
+        text: m.texts.join("\n"),
+        parts: m.texts.map((t: string) => ({ type: "text", text: t })),
+        timestamp: m.timestamp,
+        isGenerating: m.isGenerating,
+      }));
+      let changed = false;
+      if (msgs.length !== lastCount) {
+        lastCount = msgs.length;
         changed = true;
+      } else {
+        // Compute lightweight signature of last message text(s)
+        const tail = msgs
+          .slice(-3)
+          .map((m) => m.text)
+          .join("\n");
+        const sig = `${msgs.length}:${tail}`;
+        if (sig !== lastSignature) {
+          lastSignature = sig;
+          changed = true;
+        }
       }
-    }
-    if (changed) {
-      lastChangeTs = Date.now();
-      const fragments = buildFragments(msgs, summary.summary, summary.action);
-      for (const fragment of fragments) {
-        publishElementToStreams(cacheKey, fragment);
+      if (changed) {
+        lastChangeTs = Date.now();
+        const fragments = buildFragments(msgs, summary.summary, summary.action);
+        for (const fragment of fragments) {
+          publishElementToStreams(cacheKey, fragment);
+        }
       }
+    } finally {
+      pollInFlight = false;
     }
-    scheduleNextPoll(); // Schedule next poll after processing
+
+    // Schedule next poll after processing completes
+    scheduleNextPoll();
   }
 
   // Debug ring buffer (in-memory, not persisted) if debug enabled
