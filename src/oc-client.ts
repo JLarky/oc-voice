@@ -355,6 +355,18 @@ export async function ensureSummarizer(
         "ensureSummarizer created new summarizer session id",
         createdSession.id,
       );
+      try {
+        const { setEntityDescription } = await import(
+          "./utils/store-entity-descriptions"
+        );
+        let ipKey = createdSession.id;
+        try {
+          ipKey = new URL(remoteHost).hostname + ":" + createdSession.id;
+        } catch {}
+        await setEntityDescription(ipKey, "summarizer");
+      } catch (e) {
+        console.error("ensureSummarizer set description failed", errMsg(e));
+      }
     } catch (e) {
       console.error("ensureSummarizer save new failed", errMsg(e));
     }

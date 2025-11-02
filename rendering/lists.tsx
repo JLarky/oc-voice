@@ -24,9 +24,9 @@ export function SessionsUl({ ip, sessions, summarizerId }: SessionsUlProps) {
         return (
           <li style={isSummarizer ? "opacity:.5" : undefined}>
             <a href={`/sessions/${ip}/${s.id}`}>
-              <span class="id">{s.id}</span>
+              <span class="title">{s.title || "(no title)"}</span>
             </a>{" "}
-            - {s.title || "(no title)"}{" "}
+            <span style="color:#666;font-size:.7rem">{s.id}</span>{" "}
             <button
               style="background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px"
               data-on:click={`@post('/sessions/${ip}/${s.id}/delete-session')`}

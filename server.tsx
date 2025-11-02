@@ -265,6 +265,18 @@ async function fetchSessionsFresh(ip: string) {
         });
       }
     }
+    // Overlay custom description overrides after raw fallback (final list)
+    try {
+      if (list.length) {
+        const { getEntityDescription } = await import(
+          "./src/utils/store-entity-descriptions"
+        );
+        for (const entry of list) {
+          const override = await getEntityDescription(ip + ":" + entry.id);
+          if (override && override.trim()) entry.title = override.trim();
+        }
+      }
+    } catch {}
     const now = Date.now();
     const existing = cachedSessionsByIp[ip];
     if (existing) {
@@ -1625,6 +1637,14 @@ const server = Bun.serve({
           /* ignore */
         }
         let sessionTitle = "";
+        // Custom description override (ip:sid)
+        try {
+          const { getEntityDescription } = await import(
+            "./src/utils/store-entity-descriptions"
+          );
+          const override = await getEntityDescription(ip + ":" + sid);
+          if (override && override.trim()) sessionTitle = override.trim();
+        } catch {}
         try {
           const base = resolveBaseUrl(ip);
           const cache = cachedSessionsByIp[ip];
@@ -1679,6 +1699,78 @@ const server = Bun.serve({
           sessionTitle,
         });
         return new Response(page, {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+      // Inline edit title fragment: GET /sessions/:ip/:sid/title-edit
+      if (
+        parts.length === 4 &&
+        req.method === "GET" &&
+        parts[0] === "sessions" &&
+        parts[3] === "title-edit"
+      ) {
+        const ip = parts[1];
+        const sid = parts[2];
+        if (!doesIpExist(ip))
+          return new Response("Unknown IP", { status: 404 });
+        // Show input bound to description signal; use @post to save
+        let existing = "";
+        try {
+          const { getEntityDescription } = await import(
+            "./src/utils/store-entity-descriptions"
+          );
+          const override = await getEntityDescription(ip + ":" + sid);
+          if (override && override.trim()) existing = override.trim();
+        } catch {}
+        const valueEscaped = existing.replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[c] || c,
+        );
+        const jsEscaped = existing.replace(/[\\'']/g, (ch) =>
+          ch === "\\" ? "\\\\" : "\\'",
+        );
+        const html = `<div id="session-title-block" style="display:flex;align-items:center;gap:0.5rem" data-init="$description = '${jsEscaped}'">\n<label style="flex:1">\n<input type="text" name="description" data-bind:description value="${valueEscaped}" placeholder="Enter description" style="width:100%;max-width:30rem"/>\n</label>\n<button type="button" data-on:click=\"@post('/sessions/${ip}/${sid}/title-save'); $description = ''\">Save</button>\n<button type="button" data-on:click=\"@get('/sessions/${ip}/${sid}')\">Cancel</button>\n</div>`;
+        return new Response(html, {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+      // Save title fragment: POST /sessions/:ip/:sid/title-save
+      if (
+        parts.length === 4 &&
+        req.method === "POST" &&
+        parts[0] === "sessions" &&
+        parts[3] === "title-save"
+      ) {
+        const ip = parts[1];
+        const sid = parts[2];
+        if (!doesIpExist(ip))
+          return new Response("Unknown IP", { status: 404 });
+        let bodyText = "";
+        let data: FormData | null = null;
+        try {
+          data = await req.formData();
+        } catch {}
+        if (data)
+          bodyText = String(
+            data.get("description") || data.get("Description") || "",
+          ).trim();
+        const desc = bodyText.replace(/\s+/g, " ").slice(0, 256);
+        try {
+          const { setEntityDescription } = await import(
+            "./src/utils/store-entity-descriptions"
+          );
+          if (desc) await setEntityDescription(ip + ":" + sid, desc);
+        } catch {}
+        const display = desc || sid;
+        const html = `<div id="session-title-block" style="display:flex;align-items:center;gap:0.5rem">\n<h1 id="session-title" style="word-break:break-word;margin:0">${display.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] || c)}</h1>\n<button type="button" id="edit-session-title-btn" title="Edit description" style="font-size:0.9rem" data-on:click=\"@get('/sessions/${ip}/${sid}/title-edit')\">✎</button>\n</div>`;
+        return new Response(html, {
           headers: { "Content-Type": "text/html; charset=utf-8" },
         });
       }

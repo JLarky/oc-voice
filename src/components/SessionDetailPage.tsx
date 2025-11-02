@@ -10,7 +10,26 @@ export function SessionDetailPage(props: SessionDetailProps) {
   const title = props.sessionTitle || props.sessionId || "Session";
   return (
     <Layout title={`Session ${title}`} needsDatastar={true} needsClient={true}>
-      <h1 style={{ "word-break": "break-word" }}>{title}</h1>
+      <div
+        id="session-title-block"
+        style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+      >
+        <h1
+          id="session-title"
+          style={{ "word-break": "break-word", margin: 0 }}
+        >
+          {title}
+        </h1>
+        <button
+          type="button"
+          id="edit-session-title-btn"
+          title="Edit description"
+          style={{ fontSize: "0.9rem" }}
+          data-on:click={`@get('/sessions/${props.ip}/${props.sessionId}/title-edit')`}
+        >
+          ✎
+        </button>
+      </div>
       <div>
         <a href={`/sessions/${props.ip}`}>← Back to sessions for {props.ip}</a>
       </div>

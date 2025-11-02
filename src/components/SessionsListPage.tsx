@@ -7,7 +7,10 @@ export interface SessionsListProps {
 export function SessionsListPage({ ip }: SessionsListProps) {
   return (
     <Layout title={`Sessions for ${ip}`} needsDatastar={true}>
-      <h1>Sessions for {ip}</h1>
+      <div
+        id="ip-title-block"
+        data-init={`@get('/ips/${ip}/description-display')`}
+      ></div>
       <div>
         <a href="/">← Back home</a>
       </div>
