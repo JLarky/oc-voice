@@ -75,7 +75,7 @@ function AdvancedInfo({
 export function renderAutoScrollScriptEvent(): string {
   return (
     "event: datastar-script\n" +
-    "data: script (function(){var el=document.getElementById('messages-list');if(!el) return;function doScroll(){if(window.__speechIsPlaying===false) return;var last=el.querySelector('.message:last-child');if(last&&last.scrollIntoView){last.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;}if(!el.__observerAdded){var obs=new MutationObserver(function(){doScroll();});obs.observe(el,{childList:true,subtree:true});el.__observerAdded=true;}doScroll();})();\n\n"
+    "data: script (function(){var el=document.getElementById('messages-list');if(!el) return;if(!el.__observerAdded){var obs=new MutationObserver(function(muts){var last=el.querySelector('.message:last-child');if(last&&last.scrollIntoView){last.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;});obs.observe(el,{childList:true,subtree:true});el.__observerAdded=true;}var lastMsg=el.querySelector('.message:last-child');if(lastMsg&&lastMsg.scrollIntoView){lastMsg.scrollIntoView({block:'end'});}el.scrollTop=el.scrollHeight;})();\n\n"
   );
 }
 // Advanced events fragment

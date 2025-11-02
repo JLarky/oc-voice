@@ -7,7 +7,6 @@ liftHtml("messages-wrapper", {
     const root = this as HTMLElement;
     let rafId: number | null = null;
     const scroll = () => {
-      if ((window as any).__speechIsPlaying === false) return;
       if (rafId !== null) cancelAnimationFrame(rafId);
       const list = root.querySelector("#messages-list") as HTMLElement | null;
       if (!list) return;
