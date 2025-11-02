@@ -27,7 +27,7 @@ export async function loadPersistedSummary(
     const memRaw = await memStorage.getItem<string>(PREFIX + key);
     if (memRaw) {
       try {
-        const parsed: PersistedSummary = JSON.parse(memRaw);
+        const parsed: PersistedSummary = typeof memRaw === 'string' ? JSON.parse(memRaw) : memRaw;
         return validate(parsed);
       } catch {
         // fall through to fs
@@ -36,9 +36,9 @@ export async function loadPersistedSummary(
     const fsRaw = await fsStorage.getItem<string>(PREFIX + key);
     if (!fsRaw) return null;
     try {
-      const parsed: PersistedSummary = JSON.parse(fsRaw);
+      const parsed: PersistedSummary = typeof fsRaw === 'string' ? JSON.parse(fsRaw) : fsRaw;
       // Warm memory tier
-      await memStorage.setItem(PREFIX + key, fsRaw);
+      await memStorage.setItem(PREFIX + key, typeof fsRaw === 'string' ? fsRaw : JSON.stringify(fsRaw));
       return validate(parsed);
     } catch (e) {
       console.error("summary-storage parse error", (e as Error).message);
@@ -85,7 +85,7 @@ export async function pruneExpired(
       if (!raw) continue;
       let parsed: PersistedSummary | null = null;
       try {
-        parsed = JSON.parse(raw) as PersistedSummary;
+        parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as PersistedSummary;
       } catch {
         // Corrupt entry: remove
         await fsStorage.removeItem(full);
@@ -106,7 +106,7 @@ export async function pruneExpired(
         const raw = await memStorage.getItem<string>(full);
         if (!raw) continue;
         try {
-          const parsed = JSON.parse(raw) as PersistedSummary;
+          const parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as PersistedSummary;
           const ttl =
             parsed.summary === "(summary failed)" ? ttlFailMs : ttlSuccessMs;
           if (now - parsed.ts > ttl) await memStorage.removeItem(full);
@@ -149,7 +149,7 @@ async function loadLogRaw(): Promise<SummaryLogEntry[]> {
   try {
     const raw = await fsStorage.getItem<string>(LOG_KEY);
     if (!raw) return [];
-    const arr = JSON.parse(raw);
+    const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (!Array.isArray(arr)) return [];
     const out: SummaryLogEntry[] = [];
     for (const item of arr) {
