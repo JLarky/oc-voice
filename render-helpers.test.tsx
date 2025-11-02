@@ -32,7 +32,7 @@ describe("SessionsUl component", () => {
     expect(html).toContain("abc");
     expect(html).toContain("delete-session");
     expect(html).toMatchInlineSnapshot(
-      `"<ul id=\"sessions-ul\"><li><a href=\"/sessions/127.0.0.1/abc\"><span class=\"id\">abc</span></a> - Title <button style=\"background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px\" data-on:click=\"@post('/sessions/127.0.0.1/abc/delete-session')\">✕</button></li></ul>"`,
+      `"<ul id=\"sessions-ul\"><li><a href=\"/sessions/127.0.0.1/abc\"><span class=\"title\">Title</span></a> <span style=\"color:#666;font-size:.7rem\">abc</span> <button style=\"background:#e74c3c;color:#fff;border:none;padding:0 .4rem;font-size:.75rem;cursor:pointer;border-radius:3px\" data-on:click=\"@post('/sessions/127.0.0.1/abc/delete-session')\">✕</button></li></ul>"`,
     );
   });
   test("applies opacity when summarizerId matches", () => {
