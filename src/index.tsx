@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 import { staticPlugin } from "./modules/static";
 import { ipsPlugin } from "./modules/ips";
+import { entityDescriptionsPlugin } from './modules/entity-descriptions';
 import { sessionsPlugin } from "./modules/sessions";
 import { sendMessagePlugin } from "./modules/sessions/send-message";
 import { effectSessionsPlugin } from "./modules/sessions/effect-stream";
@@ -9,6 +10,7 @@ import "../server.tsx"; // start Bun server (port 3000) for legacy routes
 const app = new Elysia()
   .use(staticPlugin)
   .use(ipsPlugin)
+  .use(entityDescriptionsPlugin)
   .use(sessionsPlugin)
   .use(sendMessagePlugin)
   .use(effectSessionsPlugin)
