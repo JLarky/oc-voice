@@ -1,4 +1,5 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, afterAll } from "bun:test";
+const originalFetch = global.fetch;
 import { summarizeMessages } from "./oc-client";
 
 // Minimal mock utilities
@@ -126,4 +127,9 @@ describe("summarizeMessages", () => {
     expect(res.summary).toBe("(no messages)");
     expect(res.action).toBe(false);
   });
+});
+
+afterAll(() => {
+  // restore global fetch for other tests
+  global.fetch = originalFetch;
 });
