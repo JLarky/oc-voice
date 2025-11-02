@@ -7,6 +7,7 @@ import { sessionsPlugin } from "./modules/sessions";
 import { sessionTitlesPlugin } from "./modules/sessions/session-titles-plugin";
 import { sendMessagePlugin } from "./modules/sessions/send-message";
 import { effectSessionsPlugin } from "./modules/sessions/effect-stream";
+import { pauseResumePlugin } from "./modules/sessions/pause-resume";
 import "../server.tsx"; // start Bun server (port 3000) for legacy routes
 
 const app = new Elysia()
@@ -18,6 +19,7 @@ const app = new Elysia()
   .use(sessionsPlugin)
   .use(sendMessagePlugin)
   .use(effectSessionsPlugin)
+  .use(pauseResumePlugin)
   .onRequest(({ request }) => {
     console.log(request.method + " " + request.url);
   })

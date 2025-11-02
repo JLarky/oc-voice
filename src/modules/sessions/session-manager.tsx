@@ -6,7 +6,12 @@ import {
   persistSummary,
   appendSummaryLog,
 } from "./summary-storage";
-import { publishElementToStreams, getSubscriptionCount } from "./pubsub";
+import {
+  publishElementToStreams,
+  getSubscriptionCount,
+  isPaused,
+  getQueuedMessageCount,
+} from "./pubsub";
 import { JSX } from "preact";
 
 export interface Msg {
@@ -53,7 +58,12 @@ function startSummaryCachePruner() {
 }
 startSummaryCachePruner();
 
-export function buildFragments(msgs: Msg[], summary: string, action: boolean) {
+export function buildFragments(
+  msgs: Msg[],
+  summary: string,
+  action: boolean,
+  cacheKey?: string,
+) {
   const trimmed = msgs.length > 50 ? msgs.slice(-50) : msgs;
   // Adapt Msg[] -> TextMessage[] expected by AdvancedRecentMessages
   const adapted = trimmed.map((m) => ({
@@ -64,11 +74,17 @@ export function buildFragments(msgs: Msg[], summary: string, action: boolean) {
     parts: m.parts,
     isGenerating: m.isGenerating,
   }));
+  let statusText = `Updated ${new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true, timeZone: "America/Denver" }).format(new Date())}`;
+  if (cacheKey && isPaused(cacheKey)) {
+    const pendingCount = getQueuedMessageCount(cacheKey);
+    if (pendingCount > 0) {
+      statusText += ` (${pendingCount} new message${pendingCount === 1 ? "" : "s"} pending)`;
+    }
+  }
   const status = (
-    <div
-      id="messages-status"
-      className="status"
-    >{`Updated ${new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Denver" }).format(new Date())}`}</div>
+    <div id="messages-status" className="status">
+      {statusText}
+    </div>
   );
   const recent = (
     <AdvancedRecentMessages
@@ -303,10 +319,14 @@ export function createSessionManager(
       }
       if (changed) {
         lastChangeTs = Date.now();
-        const fragments = buildFragments(msgs, summary.summary, summary.action);
-        for (const fragment of fragments) {
+        const fragments = buildFragments(
+          msgs,
+          summary.summary,
+          summary.action,
+          cacheKey,
+        );
+        for (const fragment of fragments)
           publishElementToStreams(cacheKey, fragment);
-        }
       }
     } finally {
       pollInFlight = false;
@@ -338,7 +358,12 @@ export function createSessionManager(
   // connected streams get early UI without waiting on remote fetch. Then
   // kick off async fetch to update and re-emit if messages exist.
   {
-    const fragments = buildFragments(msgs, summary.summary, summary.action);
+    const fragments = buildFragments(
+      msgs,
+      summary.summary,
+      summary.action,
+      cacheKey,
+    );
     for (const fragment of fragments)
       publishElementToStreams(cacheKey, fragment);
   }
@@ -361,7 +386,12 @@ export function createSessionManager(
       }));
       lastCount = msgs.length;
       lastChangeTs = Date.now();
-      const fragments = buildFragments(msgs, summary.summary, summary.action);
+      const fragments = buildFragments(
+        msgs,
+        summary.summary,
+        summary.action,
+        cacheKey,
+      );
       for (const fragment of fragments)
         publishElementToStreams(cacheKey, fragment);
       pushDebug("initial fragments published");
@@ -509,7 +539,12 @@ export function createSessionManager(
             );
           });
         }
-        const fragments = buildFragments(msgs, summary.summary, summary.action);
+        const fragments = buildFragments(
+          msgs,
+          summary.summary,
+          summary.action,
+          cacheKey,
+        );
         for (const fragment of fragments) {
           publishElementToStreams(cacheKey, fragment);
         }

@@ -41,6 +41,14 @@ export function SessionDetailPage(props: SessionDetailProps) {
           <button type="button">Read Summary</button>
           <button type="button">Play</button>
           <button type="button">Test</button>
+          <button
+            type="button"
+            id="pause-resume-btn"
+            data-paused="false"
+            data-on:click={`if (document.getElementById('pause-resume-btn').dataset.paused === 'false') { @post('/sessions/${props.ip}/${props.sessionId}/pause') } else { @post('/sessions/${props.ip}/${props.sessionId}/resume') }`}
+          >
+            Pause Stream
+          </button>
         </div>
       </speech-button>
       <h2>Messages</h2>

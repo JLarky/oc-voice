@@ -9,6 +9,8 @@ import {
   unregisterSessionManager,
   sessionManagers,
   getSessionCurrentState,
+  isPaused,
+  getQueuedMessageCount,
 } from "./pubsub";
 import { createSessionManager, buildFragments } from "./session-manager";
 import { buildCacheKey, remoteBaseFromIp } from "./cache-key";
@@ -53,11 +55,17 @@ export const effectSessionsPlugin = new Elysia({
       (emit: StreamEmit.Emit<never, never, JSX.Element, void>) => {
         unsubscribePing = subscribe(cacheKey, (message) => {
           if (message.type === "updated-at") {
+            let statusText = `Updated ${new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true, timeZone: "America/Denver" }).format(message.time)}`;
+            if (isPaused(cacheKey)) {
+              const pendingCount = getQueuedMessageCount(cacheKey);
+              if (pendingCount > 0) {
+                statusText += ` (${pendingCount} new message${pendingCount === 1 ? "" : "s"} pending)`;
+              }
+            }
             const status = (
-              <div
-                id="messages-status"
-                className="status"
-              >{`Updated ${new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Denver" }).format(message.time)}`}</div>
+              <div id="messages-status" className="status">
+                {statusText}
+              </div>
             );
             emit(Effect.succeed(Chunk.of(status)));
           } else if (message.type === "publish-element") {
@@ -83,7 +91,12 @@ export const effectSessionsPlugin = new Elysia({
     }
 
     // Yield initial empty fragments (messages-list) immediately for quick UI
-    for (const fragment of buildFragments([], "(no recent messages)", false)) {
+    for (const fragment of buildFragments(
+      [],
+      "(no recent messages)",
+      false,
+      cacheKey,
+    )) {
       yield dataStarPatchElementsSSE(fragment);
     }
 
@@ -98,6 +111,7 @@ export const effectSessionsPlugin = new Elysia({
           currentState.msgs,
           currentState.summary.summary,
           currentState.summary.action,
+          cacheKey,
         );
         for (const fragment of fragments) {
           yield dataStarPatchElementsSSE(fragment);
@@ -116,6 +130,7 @@ export const effectSessionsPlugin = new Elysia({
           currentState.msgs,
           currentState.summary.summary,
           currentState.summary.action,
+          cacheKey,
         );
         for (const fragment of fragments) {
           yield dataStarPatchElementsSSE(fragment);

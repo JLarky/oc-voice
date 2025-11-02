@@ -36,6 +36,58 @@ export type SessionMessageHandler = (message: SessionMessage) => void;
 const subscriptions = new Map<string, SessionMessageHandler[]>();
 let globalTimer: NodeJS.Timeout | null = null;
 
+// Pause state tracking - per session
+const pausedSessions = new Map<string, boolean>();
+const queuedMessages = new Map<string, SessionMessage[]>();
+
+/**
+ * Set pause state for a session
+ */
+export function setPauseState(cacheKey: string, paused: boolean): void {
+  pausedSessions.set(cacheKey, paused);
+  if (!paused) {
+    // When resuming, flush queued messages
+    const queued = queuedMessages.get(cacheKey) || [];
+    if (queued.length > 0) {
+      const messages = [...queued];
+      queuedMessages.delete(cacheKey);
+      const handlers = subscriptions.get(cacheKey);
+      if (handlers) {
+        for (const message of messages) {
+          for (const handler of handlers) {
+            handler(message);
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Check if a session is paused
+ */
+export function isPaused(cacheKey: string): boolean {
+  return pausedSessions.get(cacheKey) === true;
+}
+
+/**
+ * Queue a message for a paused session
+ */
+function queueMessage(cacheKey: string, message: SessionMessage): void {
+  if (!queuedMessages.has(cacheKey)) {
+    queuedMessages.set(cacheKey, []);
+  }
+  queuedMessages.get(cacheKey)!.push(message);
+}
+
+/**
+ * Get the count of queued messages for a paused session
+ */
+export function getQueuedMessageCount(cacheKey: string): number {
+  const queued = queuedMessages.get(cacheKey);
+  return queued ? queued.length : 0;
+}
+
 // Session managers - one per unique session to share logic across multiple streams
 export const sessionManagers = new Map<
   string,
@@ -186,8 +238,12 @@ export function publishToSession(
   if (cacheKey) {
     const handlers = subscriptions.get(cacheKey);
     if (handlers) {
-      for (const handler of handlers) {
-        handler(message);
+      if (isPaused(cacheKey)) {
+        queueMessage(cacheKey, message);
+      } else {
+        for (const handler of handlers) {
+          handler(message);
+        }
       }
     }
   } else {
@@ -210,10 +266,13 @@ export function publishElementToStreams(
 ): void {
   const handlers = subscriptions.get(cacheKey);
   if (handlers) {
-    for (const handler of handlers) {
-      // Create a custom message-like structure that handlers can recognize
-      // Handlers should check if the message has the element string
-      handler({ type: "publish-element", element });
+    const message = { type: "publish-element" as const, element };
+    if (isPaused(cacheKey)) {
+      queueMessage(cacheKey, message);
+    } else {
+      for (const handler of handlers) {
+        handler(message);
+      }
     }
   }
 }
