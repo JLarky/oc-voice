@@ -108,6 +108,99 @@ export function createSessionManager(
   let summaryInterval: NodeJS.Timeout;
   let lastObservedAssistantHash = "";
 
+  // Adaptive polling: 3 levels based on activity
+  const POLL_INTERVAL_FAST_MS = 500; // When generating or recent changes (~120 calls/min)
+  const POLL_INTERVAL_MEDIUM_MS = 3000; // When idle for 10s-1min (~20 calls/min)
+  const POLL_INTERVAL_SLOW_MS = 10000; // When idle for >1min (~6 calls/min)
+  const MEDIUM_IDLE_THRESHOLD_MS = 10000; // Switch to medium after 10s of no changes
+  const SLOW_IDLE_THRESHOLD_MS = 60000; // Switch to slow after 1min of no changes
+  let lastChangeTs = Date.now();
+  let timeSinceLastChange = 0;
+
+  function scheduleNextPoll() {
+    const now = Date.now();
+    timeSinceLastChange = now - lastChangeTs;
+    const hasGenerating = msgs.some((m) => m.isGenerating === true);
+
+    // Determine polling interval based on activity level
+    let interval: number;
+    let state: string;
+    if (hasGenerating || timeSinceLastChange < MEDIUM_IDLE_THRESHOLD_MS) {
+      // Level 1: Active - generating or recent changes
+      interval = POLL_INTERVAL_FAST_MS;
+      state = hasGenerating
+        ? "generating"
+        : `active (${Math.round(timeSinceLastChange / 1000)}s ago)`;
+    } else if (timeSinceLastChange < SLOW_IDLE_THRESHOLD_MS) {
+      // Level 2: Medium idle - no activity for 10s-1min
+      interval = POLL_INTERVAL_MEDIUM_MS;
+      state = `idle (${Math.round(timeSinceLastChange / 1000)}s ago)`;
+    } else {
+      // Level 3: Very idle - no activity for >1min
+      interval = POLL_INTERVAL_SLOW_MS;
+      state = `very idle (${Math.round(timeSinceLastChange / 60)}min ago)`;
+    }
+
+    // Clear existing timeout and set new one
+    if (pollInterval) clearTimeout(pollInterval);
+
+    pollInterval = setTimeout(async () => {
+      scheduleNextPoll(); // Schedule next poll first (will re-evaluate interval)
+      await pollAndUpdate(); // Then execute poll
+    }, interval);
+
+    if (debug) {
+      pushDebug(`poll interval: ${interval}ms [${state}]`);
+    }
+  }
+
+  async function pollAndUpdate() {
+    pushDebug("poll tick");
+    let raw: TextMessage[] = [];
+    try {
+      raw = await listMessages(remoteBase, sid);
+    } catch (e) {
+      console.error(
+        "session-manager poll listMessages error",
+        (e as Error).message,
+      );
+      scheduleNextPoll(); // Schedule next poll even on error
+      return;
+    }
+    // Reassign outer msgs (avoid shadowing) so summary logic sees updates
+    msgs = raw.map((m) => ({
+      role: m.role,
+      text: m.texts.join("\n"),
+      parts: m.texts.map((t: string) => ({ type: "text", text: t })),
+      timestamp: m.timestamp,
+      isGenerating: m.isGenerating,
+    }));
+    let changed = false;
+    if (msgs.length !== lastCount) {
+      lastCount = msgs.length;
+      changed = true;
+    } else {
+      // Compute lightweight signature of last message text(s)
+      const tail = msgs
+        .slice(-3)
+        .map((m) => m.text)
+        .join("\n");
+      const sig = `${msgs.length}:${tail}`;
+      if (sig !== lastSignature) {
+        lastSignature = sig;
+        changed = true;
+      }
+    }
+    if (changed) {
+      lastChangeTs = Date.now();
+      const fragments = buildFragments(msgs, summary.summary, summary.action);
+      for (const fragment of fragments) {
+        publishElementToStreams(cacheKey, fragment);
+      }
+    }
+    scheduleNextPoll(); // Schedule next poll after processing
+  }
+
   // Debug ring buffer (in-memory, not persisted) if debug enabled
   const debugLines: string[] = [];
   function pushDebug(line: string) {
@@ -147,6 +240,7 @@ export function createSessionManager(
         isGenerating: m.isGenerating,
       }));
       lastCount = msgs.length;
+      lastChangeTs = Date.now();
       const fragments = buildFragments(msgs, summary.summary, summary.action);
       for (const fragment of fragments)
         publishElementToStreams(cacheKey, fragment);
@@ -160,52 +254,8 @@ export function createSessionManager(
     }
   })();
 
-  // Start message polling (every 400ms)
-  pollInterval = setInterval(
-    async () => {
-      pushDebug("poll tick");
-      let raw: TextMessage[] = [];
-      try {
-        raw = await listMessages(remoteBase, sid);
-      } catch (e) {
-        console.error(
-          "session-manager poll listMessages error",
-          (e as Error).message,
-        );
-      }
-      // Reassign outer msgs (avoid shadowing) so summary logic sees updates
-      msgs = raw.map((m) => ({
-        role: m.role,
-        text: m.texts.join("\n"),
-        parts: m.texts.map((t: string) => ({ type: "text", text: t })),
-        timestamp: m.timestamp,
-        isGenerating: m.isGenerating,
-      }));
-      let changed = false;
-      if (msgs.length !== lastCount) {
-        lastCount = msgs.length;
-        changed = true;
-      } else {
-        // Compute lightweight signature of last message text(s)
-        const tail = msgs
-          .slice(-3)
-          .map((m) => m.text)
-          .join("\n");
-        const sig = `${msgs.length}:${tail}`;
-        if (sig !== lastSignature) {
-          lastSignature = sig;
-          changed = true;
-        }
-      }
-      if (changed) {
-        const fragments = buildFragments(msgs, summary.summary, summary.action);
-        for (const fragment of fragments) {
-          publishElementToStreams(cacheKey, fragment);
-        }
-      }
-    },
-    400 + (debug ? 1000 : 0),
-  );
+  // Start adaptive message polling
+  scheduleNextPoll();
 
   // Start summary processing (every 200ms)
   const SUMMARY_DEBOUNCE_MS = 1500;
@@ -329,7 +379,7 @@ export function createSessionManager(
   const dispose: (() => void) & {
     __getCurrentState?: () => { msgs: Msg[]; summary: SummaryState };
   } = (() => {
-    clearInterval(pollInterval);
+    if (pollInterval) clearTimeout(pollInterval);
     clearInterval(summaryInterval);
   }) as any;
 

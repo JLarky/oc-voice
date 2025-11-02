@@ -1,3 +1,5 @@
+import { DEBUG_OPENCODE_API_CALLS } from "../config";
+
 interface TextPart {
   type: "text";
   text: string;
@@ -39,10 +41,74 @@ function errMsg(e: unknown): string {
 export const FIRST_MESSAGE_INSTRUCTION =
   "I'm driving right now, because i use voice-to-text don't be afraid to ask for clarification. You don't need to be very terse when you respond, I use voice-to-text feature that will summarize your response for me, and once I park I can take a look at the code or your full responses. To activate text-to-speech make sure that last line of your last response is a short command 'utter: <your text>'. Okay, so here it goes:";
 
+// Track listMessages call frequency
+interface CallRecord {
+  timestamp: number;
+}
+
+const listMessagesCallHistory: Map<string, CallRecord[]> = new Map();
+const CALL_HISTORY_WINDOW_MS = 60 * 1000; // 1 minute window
+
+function getCallKey(remoteHost: string, sessionId: string): string {
+  return `${remoteHost}::${sessionId}`;
+}
+
+function trackListMessagesCall(
+  remoteHost: string,
+  sessionId: string,
+): { timestamp: string; callsPerMinute: number } {
+  const key = getCallKey(remoteHost, sessionId);
+  const now = Date.now();
+  const timestamp = new Date().toISOString();
+
+  // Get or create history for this session
+  let history = listMessagesCallHistory.get(key);
+  if (!history) {
+    history = [];
+    listMessagesCallHistory.set(key, history);
+  }
+
+  // Add current call
+  history.push({ timestamp: now });
+
+  // Remove calls older than 1 minute
+  const cutoff = now - CALL_HISTORY_WINDOW_MS;
+  while (history.length > 0 && history[0]!.timestamp < cutoff) {
+    history.shift();
+  }
+
+  // Calculate calls per minute
+  const callsPerMinute = history.length;
+
+  // Clean up old entries (sessions with no calls in last 5 minutes)
+  if (listMessagesCallHistory.size > 100) {
+    const cleanupCutoff = now - 5 * CALL_HISTORY_WINDOW_MS;
+    for (const [k, h] of listMessagesCallHistory.entries()) {
+      if (h.length === 0 || (h[h.length - 1]?.timestamp || 0) < cleanupCutoff) {
+        listMessagesCallHistory.delete(k);
+      }
+    }
+  }
+
+  return { timestamp, callsPerMinute };
+}
+
 export async function listMessages(
   remoteHost: string,
   sessionId: string,
 ): Promise<TextMessage[]> {
+  const { timestamp, callsPerMinute } = trackListMessagesCall(
+    remoteHost,
+    sessionId,
+  );
+  if (DEBUG_OPENCODE_API_CALLS) {
+    console.log("[opencode API] listMessages", {
+      remoteHost,
+      sessionId,
+      timestamp,
+      callsPerMinute: `${callsPerMinute}/min`,
+    });
+  }
   const rawRes = await fetch(`${remoteHost}/session/${sessionId}/message`);
   const messages: Message[] = await rawRes.json();
   if (!Array.isArray(messages)) return [];
@@ -95,6 +161,13 @@ export async function sendMessage(
   if (!text.trim())
     return { ok: false, status: 400, replyTexts: [], error: "Empty text" };
   try {
+    if (DEBUG_OPENCODE_API_CALLS) {
+      console.log("[opencode API] sendMessage", {
+        remoteHost,
+        sessionId,
+        textLength: text.length,
+      });
+    }
     const rawRes = await fetch(`${remoteHost}/session/${sessionId}/message`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -142,6 +215,9 @@ interface RawSession {
 export async function listSessions(
   remoteHost: string,
 ): Promise<SessionBasic[]> {
+  if (DEBUG_OPENCODE_API_CALLS) {
+    console.log("[opencode API] listSessions", { remoteHost });
+  }
   const out: SessionBasic[] = [];
   try {
     const res = await fetch(`${remoteHost}/session`);
@@ -243,6 +319,12 @@ export async function ensureSummarizer(
   }
   let createdSession: SessionBasic | null = null;
   try {
+    if (DEBUG_OPENCODE_API_CALLS) {
+      console.log("[opencode API] createSession (via ensureSummarizer)", {
+        remoteHost,
+        title,
+      });
+    }
     const res = await fetch(`${remoteHost}/session`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -368,6 +450,9 @@ export async function createSession(
   remoteHost: string,
   title: string,
 ): Promise<string | null> {
+  if (DEBUG_OPENCODE_API_CALLS) {
+    console.log("[opencode API] createSession", { remoteHost, title });
+  }
   try {
     const res = await fetch(`${remoteHost}/session`, {
       method: "POST",

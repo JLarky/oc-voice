@@ -4,6 +4,7 @@
 const port = 3001;
 
 import { createOpencodeClient } from "@opencode-ai/sdk";
+import { DEBUG_OPENCODE_API_CALLS } from "./config";
 
 import { listMessages } from "./src/oc-client";
 import { shouldReuseSummary } from "./src/hash";
@@ -211,6 +212,9 @@ async function fetchSessionsFresh(ip: string) {
   console.log("sessions fetch start", { ip, base });
   try {
     const client = createOpencodeClient({ baseUrl: base });
+    if (DEBUG_OPENCODE_API_CALLS) {
+      console.log("[opencode API] SDK client.session.list", { ip, base });
+    }
     const remote = await client.session.list().catch((e: any) => {
       console.warn("SDK session.list error", {
         ip,
@@ -234,6 +238,9 @@ async function fetchSessionsFresh(ip: string) {
     }
     if (!list.length) {
       try {
+        if (DEBUG_OPENCODE_API_CALLS) {
+          console.log("[opencode API] raw fetch GET /session", { ip, base });
+        }
         const rawRes = await fetch(`${base}/session`);
         console.log("raw /session status", { ip, status: rawRes.status });
         if (rawRes.ok) {
@@ -398,6 +405,13 @@ const server = Bun.serve({
           const client = createOpencodeClient({ baseUrl: base });
           let created: any;
           try {
+            if (DEBUG_OPENCODE_API_CALLS) {
+              console.log("[opencode API] SDK client.session.create", {
+                ip,
+                base,
+                title,
+              });
+            }
             created = await client.session.create({ body: { title } });
             console.log("SDK session.create raw:", created);
           } catch (e) {
@@ -821,6 +835,12 @@ const server = Bun.serve({
               attempts.push({ label, ok: false, error: (e as Error).message });
             }
           }
+          if (DEBUG_OPENCODE_API_CALLS) {
+            console.log("[opencode API] SDK client.session.get attempts", {
+              ip,
+              sid,
+            });
+          }
           await tryGet("params.id", () =>
             (client as any).session.get?.({ path: { id: sid } }),
           );
@@ -843,6 +863,13 @@ const server = Bun.serve({
           // Raw fetch fallback for comparison if still missing
           if (!sdkDetail) {
             try {
+              if (DEBUG_OPENCODE_API_CALLS) {
+                console.log("[opencode API] raw fetch GET /session/:sid", {
+                  ip,
+                  sid,
+                  base,
+                });
+              }
               const rawRes = await fetch(`${base}/session/${sid}`);
               if (rawRes.ok) rawDetail = await rawRes.json().catch(() => null);
               attempts.push({
@@ -859,6 +886,13 @@ const server = Bun.serve({
             }
           }
           try {
+            if (DEBUG_OPENCODE_API_CALLS) {
+              console.log("[opencode API] SDK client.session.list", {
+                ip,
+                sid,
+                base,
+              });
+            }
             sdkList = await client.session.list().catch((e: any) => {
               console.warn(
                 "SDK session.list error",
@@ -1533,6 +1567,13 @@ const server = Bun.serve({
           const client = createOpencodeClient({ baseUrl: base });
           let exists = false;
           try {
+            if (DEBUG_OPENCODE_API_CALLS) {
+              console.log("[opencode API] SDK client.session.get", {
+                ip,
+                sid,
+                base,
+              });
+            }
             const detail = await (client as any).session.get?.({
               path: { id: sid },
             });
@@ -1542,6 +1583,13 @@ const server = Bun.serve({
           }
           if (!exists) {
             try {
+              if (DEBUG_OPENCODE_API_CALLS) {
+                console.log("[opencode API] raw fetch GET /session/:sid", {
+                  ip,
+                  sid,
+                  base,
+                });
+              }
               const rawRes = await fetch(`${base}/session/${sid}`);
               if (rawRes.ok) {
                 const rawJson = await rawRes.json().catch(() => null);
@@ -1553,6 +1601,14 @@ const server = Bun.serve({
           }
           if (!exists) {
             try {
+              console.log(
+                "[opencode API] SDK client.session.list (check exists)",
+                {
+                  ip,
+                  sid,
+                  base,
+                },
+              );
               const list = await client.session.list();
               exists =
                 Array.isArray(list) && list.some((s: any) => s.id === sid);
@@ -1580,6 +1636,16 @@ const server = Bun.serve({
           if (!sessionTitle) {
             try {
               const client2 = createOpencodeClient({ baseUrl: base });
+              if (DEBUG_OPENCODE_API_CALLS) {
+                console.log(
+                  "[opencode API] SDK client.session.list (get title)",
+                  {
+                    ip,
+                    sid,
+                    base,
+                  },
+                );
+              }
               const list2 = await client2.session.list().catch(() => []);
               if (Array.isArray(list2)) {
                 const found2 = list2.find((s: any) => s && s.id === sid);
