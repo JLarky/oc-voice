@@ -1,7 +1,11 @@
 import { AdvancedRecentMessages } from "../../../rendering/fragments";
 import { listMessages, summarizeMessages, TextMessage } from "../../oc-client";
 import { shouldReuseSummary } from "../../hash";
-import { loadPersistedSummary, persistSummary, appendSummaryLog } from './summary-storage';
+import {
+  loadPersistedSummary,
+  persistSummary,
+  appendSummaryLog,
+} from "./summary-storage";
 import { publishElementToStreams, getSubscriptionCount } from "./pubsub";
 import { JSX } from "preact";
 
@@ -108,12 +112,20 @@ export function createSessionManager(
           summary.action = persisted.action;
           summary.lastHash = persisted.hash;
           summaryCache.set(cacheKey, { ...persisted, inFlight: false });
-          const fragments = buildFragments(msgs, summary.summary, summary.action);
-          for (const fragment of fragments) publishElementToStreams(cacheKey, fragment);
+          const fragments = buildFragments(
+            msgs,
+            summary.summary,
+            summary.action,
+          );
+          for (const fragment of fragments)
+            publishElementToStreams(cacheKey, fragment);
         }
       });
     } catch (e) {
-      console.error('session-manager persisted load error', (e as Error).message);
+      console.error(
+        "session-manager persisted load error",
+        (e as Error).message,
+      );
     }
   }
   if (existing) {
@@ -484,11 +496,17 @@ export function createSessionManager(
         };
         summaryCache.set(cacheKey, persisted);
         persistSummary(cacheKey, persisted).catch((e) => {
-          console.error('session-manager persistSummary error', (e as Error).message);
+          console.error(
+            "session-manager persistSummary error",
+            (e as Error).message,
+          );
         });
-        if (persisted.summary !== '(summary failed)') {
+        if (persisted.summary !== "(summary failed)") {
           appendSummaryLog(cacheKey, persisted).catch((e) => {
-            console.error('session-manager appendSummaryLog error', (e as Error).message);
+            console.error(
+              "session-manager appendSummaryLog error",
+              (e as Error).message,
+            );
           });
         }
         const fragments = buildFragments(msgs, summary.summary, summary.action);
@@ -496,7 +514,7 @@ export function createSessionManager(
           publishElementToStreams(cacheKey, fragment);
         }
       } catch (e) {
-console.error("session-manager summary error", (e as Error).message);
+        console.error("session-manager summary error", (e as Error).message);
         summary.summary = "(summary failed)";
         summary.action = false;
         const persistedFail = {
@@ -508,7 +526,10 @@ console.error("session-manager summary error", (e as Error).message);
         };
         summaryCache.set(cacheKey, persistedFail);
         persistSummary(cacheKey, persistedFail).catch((e) => {
-          console.error('session-manager persistSummary error', (e as Error).message);
+          console.error(
+            "session-manager persistSummary error",
+            (e as Error).message,
+          );
         });
         pushDebug(
           "summary error " + (e instanceof Error ? e.message : String(e)),
@@ -534,6 +555,13 @@ console.error("session-manager summary error", (e as Error).message);
     msgs,
     summary: { ...summary },
   });
+
+  // External hook: when a user sends a new message, immediately
+  // treat it as recent activity and reschedule polling to fast cadence
+  (dispose as any).__notifyUserMessageSent = () => {
+    lastChangeTs = Date.now();
+    scheduleNextPoll();
+  };
 
   return dispose;
 }
