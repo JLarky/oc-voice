@@ -382,6 +382,8 @@ export async function ensureSummarizer(
 export const summarizationPrompt =
   "Read those messages from an assistant. Understand if assistant is asking something from user or just reporting the status. If a question is asked or action from user is needed then reply with <= 18 words summary. If 'utter' command is used, say only the text that was uttered, don't add anything to it. If no action needed from user, reply '...'. If assistant didn't ask any questions or did't ask for clarification, reply '...'.";
 
+const MAX_SUMMARY_LENGTH = 500;
+
 // Summarize recent messages using dedicated summarizer session.
 // recentMessages: array of last messages with role + text
 // Returns summary line plus parsed action flag.
@@ -445,7 +447,8 @@ export async function summarizeMessages(
       };
     const raw = sendCombined.replyTexts.join("\n").replace("utter:", "").trim();
     const action = /\|\s*action\s*=\s*yes/i.test(raw);
-    return { summary: raw, action, raw, ok: true };
+    const summary = raw.length > MAX_SUMMARY_LENGTH ? "too long" : raw;
+    return { summary, action, raw, ok: true };
   } catch (e) {
     return {
       summary: "",
