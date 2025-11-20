@@ -1,0 +1,4 @@
+[daemons.ocv]
+run = "mise start-bg"
+auto = ["start", "stop"]
+ready.http = { url = "http://localhost:3000" }

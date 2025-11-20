@@ -8,6 +8,9 @@ run = "bun install"
 [tasks.start]
 run = "docker run --rm -it -p 3000:3000 -v $PWD:/work -w /work -v ~/.colima-jail/mise:/mise -v ~/.colima-jail/root:/root jdxcode/mise:latest x -- bun dev $MISE_ARG_1"
 
+[tasks."start-bg"]
+run = "docker run --rm -p 3000:3000 -v $PWD:/work -w /work -v ~/.colima-jail/mise:/mise -v ~/.colima-jail/root:/root jdxcode/mise:latest x -- bun dev $MISE_ARG_1"
+
 [tasks.format]
 run = "bunx oxfmt@latest"
 
